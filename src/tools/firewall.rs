@@ -12,13 +12,27 @@ pub async fn add_filter(
     p: &AddFirewallFilterParams,
 ) -> anyhow::Result<Value> {
     let mut body = json!({"chain": p.chain, "action": p.action});
-    if let Some(v) = &p.src_address   { body["src-address"]  = json!(v); }
-    if let Some(v) = &p.dst_address   { body["dst-address"]  = json!(v); }
-    if let Some(v) = &p.protocol      { body["protocol"]     = json!(v); }
-    if let Some(v) = &p.dst_port      { body["dst-port"]     = json!(v); }
-    if let Some(v) = &p.in_interface  { body["in-interface"] = json!(v); }
-    if let Some(v) = &p.comment       { body["comment"]      = json!(v); }
-    if let Some(v) = p.disabled       { body["disabled"]     = json!(v); }
+    if let Some(v) = &p.src_address {
+        body["src-address"] = json!(v);
+    }
+    if let Some(v) = &p.dst_address {
+        body["dst-address"] = json!(v);
+    }
+    if let Some(v) = &p.protocol {
+        body["protocol"] = json!(v);
+    }
+    if let Some(v) = &p.dst_port {
+        body["dst-port"] = json!(v);
+    }
+    if let Some(v) = &p.in_interface {
+        body["in-interface"] = json!(v);
+    }
+    if let Some(v) = &p.comment {
+        body["comment"] = json!(v);
+    }
+    if let Some(v) = p.disabled {
+        body["disabled"] = json!(v);
+    }
     client.post("ip/firewall/filter", &body).await
 }
 
@@ -30,19 +44,32 @@ pub async fn list_nat(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/firewall/nat").await
 }
 
-pub async fn add_nat(
-    client: &RouterosClient,
-    p: &AddFirewallNatParams,
-) -> anyhow::Result<Value> {
+pub async fn add_nat(client: &RouterosClient, p: &AddFirewallNatParams) -> anyhow::Result<Value> {
     let mut body = json!({"chain": p.chain, "action": p.action});
-    if let Some(v) = &p.src_address  { body["src-address"]  = json!(v); }
-    if let Some(v) = &p.dst_address  { body["dst-address"]  = json!(v); }
-    if let Some(v) = &p.protocol     { body["protocol"]     = json!(v); }
-    if let Some(v) = &p.dst_port     { body["dst-port"]     = json!(v); }
-    if let Some(v) = &p.to_addresses { body["to-addresses"] = json!(v); }
-    if let Some(v) = &p.to_ports     { body["to-ports"]     = json!(v); }
-    if let Some(v) = &p.out_interface{ body["out-interface"]= json!(v); }
-    if let Some(v) = &p.comment      { body["comment"]      = json!(v); }
+    if let Some(v) = &p.src_address {
+        body["src-address"] = json!(v);
+    }
+    if let Some(v) = &p.dst_address {
+        body["dst-address"] = json!(v);
+    }
+    if let Some(v) = &p.protocol {
+        body["protocol"] = json!(v);
+    }
+    if let Some(v) = &p.dst_port {
+        body["dst-port"] = json!(v);
+    }
+    if let Some(v) = &p.to_addresses {
+        body["to-addresses"] = json!(v);
+    }
+    if let Some(v) = &p.to_ports {
+        body["to-ports"] = json!(v);
+    }
+    if let Some(v) = &p.out_interface {
+        body["out-interface"] = json!(v);
+    }
+    if let Some(v) = &p.comment {
+        body["comment"] = json!(v);
+    }
     client.post("ip/firewall/nat", &body).await
 }
 

@@ -1,8 +1,10 @@
 use anyhow::Context;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
-use crate::params::{GetLogsParams, RestoreBackupParams, SaveBackupParams};
+use crate::params::{
+    GetLogsParams, RestoreBackupParams, SaveBackupParams, SetSystemIdentityParams,
+};
 
 pub async fn get_resources(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/resource").await
@@ -10,6 +12,15 @@ pub async fn get_resources(client: &RouterosClient) -> anyhow::Result<Value> {
 
 pub async fn get_identity(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/identity").await
+}
+
+pub async fn set_identity(
+    client: &RouterosClient,
+    p: &SetSystemIdentityParams,
+) -> anyhow::Result<Value> {
+    client
+        .post("system/identity/set", &json!({"name": p.name}))
+        .await
 }
 
 pub async fn get_logs(client: &RouterosClient, p: &GetLogsParams) -> anyhow::Result<Value> {
@@ -96,7 +107,10 @@ pub async fn restore_backup(
         .await
         .context("step 2: POST system/backup/load failed")?;
 
-    Ok(format!("backup {} loaded — device is rebooting", remote_name))
+    Ok(format!(
+        "backup {} loaded — device is rebooting",
+        remote_name
+    ))
 }
 
 #[cfg(test)]
@@ -135,6 +149,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_identity_posts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/identity/set"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = crate::params::SetSystemIdentityParams {
+            name: "r-atl-5g".into(),
+        };
+        let result = set_identity(&client, &p).await.unwrap();
+        assert!(result.is_object());
+    }
+
+    #[tokio::test]
     async fn get_logs_filters_by_topic() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -148,7 +179,10 @@ mod tests {
             .await;
 
         let client = RouterosClient::for_test(&server.uri());
-        let p = GetLogsParams { topics: Some("dhcp".into()), count: None };
+        let p = GetLogsParams {
+            topics: Some("dhcp".into()),
+            count: None,
+        };
         let result = get_logs(&client, &p).await.unwrap();
         let arr = result.as_array().unwrap();
         assert_eq!(arr.len(), 2);
@@ -167,7 +201,10 @@ mod tests {
             .await;
 
         let client = RouterosClient::for_test(&server.uri());
-        let p = GetLogsParams { topics: None, count: Some(10) };
+        let p = GetLogsParams {
+            topics: None,
+            count: Some(10),
+        };
         let result = get_logs(&client, &p).await.unwrap();
         assert_eq!(result.as_array().unwrap().len(), 10);
     }

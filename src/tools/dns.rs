@@ -11,10 +11,7 @@ pub async fn list_static(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/dns/static").await
 }
 
-pub async fn add_static(
-    client: &RouterosClient,
-    p: &AddDnsStaticParams,
-) -> anyhow::Result<Value> {
+pub async fn add_static(client: &RouterosClient, p: &AddDnsStaticParams) -> anyhow::Result<Value> {
     let mut body = json!({"name": p.name, "address": p.address});
     if let Some(ttl) = p.ttl {
         body["ttl"] = json!(format!("{}s", ttl));
