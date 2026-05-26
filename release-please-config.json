@@ -5,7 +5,13 @@
     ".": {
       "package-name": "mikrotik-mcp",
       "changelog-path": "CHANGELOG.md",
-      "include-component-in-tag": false
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "README.md"
+        }
+      ]
     }
   },
   "pull-request-title-pattern": "chore: release ${version}",
