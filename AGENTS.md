@@ -112,6 +112,29 @@ every push/PR to `main`. All jobs must pass. The release workflow
 (`.github/workflows/release.yml`) runs separately and only acts on `main`
 pushes or manual dispatch.
 
+## Tool descriptions
+
+Tool descriptions (the `description = "…"` string in each `#[tool(…)]` attribute)
+must stay close to the language used in the official MikroTik documentation. Use
+the same field names, menu paths, and terminology that RouterOS uses — don't invent
+synonyms or over-explain RouterOS internals.
+
+When adding or updating a tool, look up the relevant wiki page first and mirror
+its terminology. Key references:
+
+| Area | Wiki page |
+|------|-----------|
+| REST API general | <https://help.mikrotik.com/docs/spaces/ROS/pages/47579229/REST+API> |
+| IP neighbors (CDP/LLDP/MNDP) | <https://help.mikrotik.com/docs/spaces/ROS/pages/8323118/IP+Neighbors> |
+| IP addresses | <https://help.mikrotik.com/docs/spaces/ROS/pages/328088/IP+Address> |
+| DHCP server | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805500/DHCP> |
+| Firewall filter & NAT | <https://help.mikrotik.com/docs/spaces/ROS/pages/328091/Firewall+Filter> |
+| Interfaces | <https://help.mikrotik.com/docs/spaces/ROS/pages/328155/Ethernet> |
+| Wireless (legacy) | <https://help.mikrotik.com/docs/spaces/ROS/pages/1409044/Wireless> |
+| CAPsMAN | <https://help.mikrotik.com/docs/spaces/ROS/pages/1409149/CAPsMAN> |
+| Routes | <https://help.mikrotik.com/docs/spaces/ROS/pages/328196/IP+Routing> |
+| DNS | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805404/DNS> |
+
 ## Things to avoid
 
 - Don't write to stdout from the server process — stdout is the MCP protocol
