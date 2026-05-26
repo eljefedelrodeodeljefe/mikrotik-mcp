@@ -33,7 +33,9 @@ pub struct RestoreBackupParams {
 pub struct GetLogsParams {
     #[schemars(description = "Maximum number of log entries to return (default: 50)")]
     pub count: Option<u32>,
-    #[schemars(description = "Filter entries whose topics field contains this string (e.g. 'dhcp', 'firewall')")]
+    #[schemars(
+        description = "Filter entries whose topics field contains this string (e.g. 'dhcp', 'firewall')"
+    )]
     pub topics: Option<String>,
 }
 
