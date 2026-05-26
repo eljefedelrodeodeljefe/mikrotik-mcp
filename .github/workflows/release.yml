@@ -1,45 +1,22 @@
 name: Release
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main, develop]
+  release:
+    types: [published]
 
 permissions:
   contents: write
-  pull-requests: write
 
-# Serialize releases per branch but never cancel — interrupting mid-tag /
-# mid-upload would leave a half-published release behind.
+# Never cancel — interrupting mid-upload leaves a half-published release.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release-please:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      prerelease: ${{ steps.release.outputs.prerelease }}
-    steps:
-      - uses: googleapis/release-please-action@v4
-        id: release
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-          target-branch: ${{ github.ref_name }}
-          prerelease: ${{ github.ref_name == 'develop' }}
-
-  # Binary build matrix runs for STABLE releases only (tag has no `-` suffix).
-  # Pre-releases on develop still get a tag + GH release, but no artifacts.
   build:
     name: build / ${{ matrix.target }}
-    needs: release-please
-    if: |
-      needs.release-please.outputs.release_created == 'true' &&
-      needs.release-please.outputs.prerelease != 'true'
+    # Skip pre-releases (tags with a `-` suffix, e.g. 0.2.0-rc.1).
+    if: "!github.event.release.prerelease"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -67,9 +44,9 @@ jobs:
         run: |
           mkdir -p dist
           tar -C target/${{ matrix.target }}/release -czf \
-            dist/mikrotik-mcp-${{ needs.release-please.outputs.tag_name }}-${{ matrix.target }}.tar.gz \
+            dist/mikrotik-mcp-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz \
             mikrotik-mcp
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/*.tar.gz --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.tar.gz --clobber
