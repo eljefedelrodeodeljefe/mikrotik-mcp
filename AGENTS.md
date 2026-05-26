@@ -59,6 +59,32 @@ If `cspell` flags a real domain word, add it to `.cspell/project-words.txt`.
 
 [prek]: https://github.com/j178/prek
 
+## Branch naming (gitflow)
+
+This repo follows [gitflow][gitflow]:
+
+- `main` — production / released code. Tagged versions live here. Only
+  release PRs (from release-please) and hotfixes merge directly.
+- `develop` — integration branch. Day-to-day work targets this branch.
+  Releases are cut by merging `develop` → `main`.
+- `feature/<short-name>` — new features. Branch off `develop`, PR back into
+  `develop`. Example: `feature/firewall-rules`.
+- `bugfix/<short-name>` — non-urgent bug fixes. Branch off `develop`, PR into
+  `develop`.
+- `release/<version>` — release stabilisation. Branch off `develop`, PR into
+  `main` (and back-merge into `develop`). Usually managed automatically by
+  release-please.
+- `hotfix/<short-name>` — urgent production fixes. Branch off `main`, PR into
+  `main` *and* `develop`.
+
+Use kebab-case slugs (`feature/dhcp-lease-tools`, not
+`feature/DHCP_Lease_Tools`). Keep names short and topic-focused, not
+ticket-numbered (we don't use issue trackers as filenames here).
+
+CI runs on all five branch prefixes plus pushes to `main` and `develop`.
+
+[gitflow]: https://nvie.com/posts/a-successful-git-branching-model/
+
 ## Commit messages
 
 Conventional commits. The version is cut by release-please from these prefixes:

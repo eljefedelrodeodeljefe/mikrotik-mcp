@@ -3,7 +3,7 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: write
@@ -15,17 +15,24 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          target-branch: ${{ github.ref_name }}
+          prerelease: ${{ github.ref_name == 'develop' }}
 
+  # Binary build matrix runs for STABLE releases only (tag has no `-` suffix).
+  # Pre-releases on develop still get a tag + GH release, but no artifacts.
   build:
     name: build / ${{ matrix.target }}
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: |
+      needs.release-please.outputs.release_created == 'true' &&
+      needs.release-please.outputs.prerelease != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
