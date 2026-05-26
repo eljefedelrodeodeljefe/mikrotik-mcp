@@ -478,8 +478,8 @@ impl MikrotikServer {
     }
 
     #[tool(
-        description = "List IP neighbors discovered via CDP, LLDP, and MNDP — shows board model, \
-            identity, IP address, MAC, interface, and uptime for all reachable MikroTik and Cisco devices"
+        description = "List IP neighbors discovered via neighbor discovery protocols (CDP/LLDP/MNDP) \
+            — shows board model, identity, IP address, MAC, interface, and uptime for each neighbor"
     )]
     async fn list_neighbors(&self) -> Result<CallToolResult, ErrorData> {
         let data: Value = self.client.get("ip/neighbor").await.map_err(tool_error)?;
