@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.1.1...v0.2.0) (2026-05-26)
+
+
+### Features
+
+* add list_neighbors tool (ip/neighbor — CDP/LLDP/MNDP) ([b69e692](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/b69e69204e4328396fa29f1033586258b473b39e))
+* add list_neighbors tool (ip/neighbor) ([43115ec](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/43115eceef70025f5212fe31ba670c6f119d32b2))
+
+
+### Bug Fixes
+
+* add LLDP/MNDP/CDP to wordlist; fix double blank in CHANGELOG ([3d94e1d](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/3d94e1d8142c24455bafcb30f61a548c56415ae5))
+* remove Cisco mention from list_neighbors description ([128b7e4](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/128b7e4b12c8f5b38206459676b71f4c91fd495d))
+
+
+### Refactors
+
+* split server into tools/ + params/ modules; add write gate ([3b4a0f6](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/3b4a0f65171fd5ca67a95a39a336257f7a8d9bfa))
+
+
+### Documentation
+
+* add AGENTS.md for AI coding agents ([2f663f8](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/2f663f886da0421a5b887637b0332422a68a57f2))
+* add experimental status banner to README ([187a0e4](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/187a0e42d167a31a4e9da81f6ab51d9c69f3b482))
+* add tool description guidelines with MikroTik wiki links to AGENTS.md ([2257073](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/225707345481a3f84a7baa786f767b33f92879d9))
+* document develop prereleases ([47321f8](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/47321f83e738e3bf9a14e0efab817f6f96e00341))
+* fix two 404 wiki links and add link-freshness note to AGENTS.md ([221be2c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/221be2ccab0a3e2be4992470eac149753d9a2961))
+* hide release-please marker behind html comment block ([20f46f5](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/20f46f58cb7b107b633eac0851aa718dbdc324af))
+* no AI attribution in commits ([906025e](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/906025ef1f382c1052aa54487d4c071bf34bda85))
+* pin cargo install to release tag, auto-bumped by release-please ([b889870](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/b889870e0e66a973d3bdd2562a86a8c6ff28a151))
+
 ## [0.1.1](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.1.0...v0.1.1) (2026-05-26)
 
 ### Documentation
