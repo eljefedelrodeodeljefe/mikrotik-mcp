@@ -36,3 +36,6 @@ RUSTFLAGS
 RUSTDOCFLAGS
 Lindstaedt
 changeme
+gitflow
+hotfixes
+stabilisation
