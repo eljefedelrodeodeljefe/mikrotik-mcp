@@ -9,9 +9,16 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialize releases per branch but never cancel — interrupting mid-tag /
+# mid-upload would leave a half-published release behind.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-please:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -34,6 +41,7 @@ jobs:
       needs.release-please.outputs.release_created == 'true' &&
       needs.release-please.outputs.prerelease != 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

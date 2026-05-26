@@ -7,8 +7,10 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Cancel superseded runs on the same ref. PRs use the head_ref so each push to a
+# PR cancels the previous build; non-PR pushes use the full ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -19,6 +21,7 @@ jobs:
   pre-commit:
     name: CI / pre-commit (prek)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -38,6 +41,7 @@ jobs:
   check:
     name: CI / check
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -47,6 +51,7 @@ jobs:
   format:
     name: CI / format
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -57,6 +62,7 @@ jobs:
   clippy:
     name: CI / clippy
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -68,6 +74,7 @@ jobs:
   test:
     name: CI / test
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -77,6 +84,7 @@ jobs:
   doc:
     name: CI / doc
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
