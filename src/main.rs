@@ -19,22 +19,21 @@ async fn main() -> Result<()> {
     // rebuilds it. Claude Code auto-restarts crashed MCP servers, so this
     // gives zero-restart hot-reload during development.
     #[cfg(debug_assertions)]
-    if let Ok(exe) = std::env::current_exe() {
-        if let Ok(meta) = std::fs::metadata(&exe) {
-            if let Ok(initial_mtime) = meta.modified() {
-                tokio::spawn(async move {
-                    loop {
-                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                        if let Ok(m) = std::fs::metadata(&exe) {
-                            if m.modified().ok() != Some(initial_mtime) {
-                                tracing::info!("binary changed — exiting for hot-reload");
-                                std::process::exit(0);
-                            }
-                        }
-                    }
-                });
+    if let Ok(exe) = std::env::current_exe()
+        && let Ok(meta) = std::fs::metadata(&exe)
+        && let Ok(initial_mtime) = meta.modified()
+    {
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                if let Ok(m) = std::fs::metadata(&exe)
+                    && m.modified().ok() != Some(initial_mtime)
+                {
+                    tracing::info!("binary changed — exiting for hot-reload");
+                    std::process::exit(0);
+                }
             }
-        }
+        });
     }
 
     let server = server::MikrotikServer::from_env()?;

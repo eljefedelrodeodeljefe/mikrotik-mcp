@@ -160,6 +160,19 @@ Workflow:
 
 Other jobs: `bacon check`, `bacon clippy`.
 
+## Development
+
+Pre-commit hooks (rustfmt, clippy, editorconfig, markdownlint, basic
+hygiene) live in `.pre-commit-config.yaml`. Run them with [prek][prek],
+the Rust reimplementation of pre-commit:
+
+```sh
+prek install            # one-time: install git hook
+prek run --all-files    # run all hooks against the whole tree
+```
+
+[prek]: https://github.com/j178/prek
+
 ## License
 
 MIT

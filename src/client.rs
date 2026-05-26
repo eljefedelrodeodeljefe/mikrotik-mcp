@@ -11,7 +11,13 @@ pub struct RouterosClient {
 }
 
 impl RouterosClient {
-    pub fn new(host: &str, port: u16, username: &str, password: &str, tls_verify: bool) -> Result<Self> {
+    pub fn new(
+        host: &str,
+        port: u16,
+        username: &str,
+        password: &str,
+        tls_verify: bool,
+    ) -> Result<Self> {
         let client = Client::builder()
             .danger_accept_invalid_certs(!tls_verify)
             .build()
@@ -75,8 +81,10 @@ impl RouterosClient {
     pub async fn ftp_download(&self, filename: &str) -> Result<Vec<u8>> {
         let output = tokio::process::Command::new("curl")
             .args([
-                "--silent", "--fail",
-                "--user", &format!("{}:{}", self.username, self.password),
+                "--silent",
+                "--fail",
+                "--user",
+                &format!("{}:{}", self.username, self.password),
                 &format!("ftp://{}:21/{}", self.host, filename),
             ])
             .output()
@@ -85,7 +93,11 @@ impl RouterosClient {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("curl FTP failed ({}): {}", output.status, stderr.trim()));
+            return Err(anyhow::anyhow!(
+                "curl FTP failed ({}): {}",
+                output.status,
+                stderr.trim()
+            ));
         }
 
         Ok(output.stdout)
@@ -94,9 +106,12 @@ impl RouterosClient {
     pub async fn ftp_upload(&self, local_path: &str, remote_filename: &str) -> Result<()> {
         let output = tokio::process::Command::new("curl")
             .args([
-                "--silent", "--fail",
-                "--user", &format!("{}:{}", self.username, self.password),
-                "-T", local_path,
+                "--silent",
+                "--fail",
+                "--user",
+                &format!("{}:{}", self.username, self.password),
+                "-T",
+                local_path,
                 &format!("ftp://{}:21/{}", self.host, remote_filename),
             ])
             .output()
@@ -105,7 +120,11 @@ impl RouterosClient {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("curl FTP upload failed ({}): {}", output.status, stderr.trim()));
+            return Err(anyhow::anyhow!(
+                "curl FTP upload failed ({}): {}",
+                output.status,
+                stderr.trim()
+            ));
         }
 
         Ok(())
