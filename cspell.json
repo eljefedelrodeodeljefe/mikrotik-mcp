@@ -14,7 +14,8 @@
     ".git/",
     "target/",
     "*.lock",
-    "Cargo.lock"
+    "Cargo.lock",
+    "CHANGELOG.md"
   ],
   "ignoreRegExpList": [
     "/[A-Za-z0-9+/]{16,}={0,2}/",
