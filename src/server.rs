@@ -476,6 +476,15 @@ impl MikrotikServer {
         let data: Value = self.client.get("ip/route").await.map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
+
+    #[tool(
+        description = "List IP neighbors discovered via CDP, LLDP, and MNDP — shows board model, \
+            identity, IP address, MAC, interface, and uptime for all reachable MikroTik and Cisco devices"
+    )]
+    async fn list_neighbors(&self) -> Result<CallToolResult, ErrorData> {
+        let data: Value = self.client.get("ip/neighbor").await.map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
 }
 
 #[tool_handler]

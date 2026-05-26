@@ -2,7 +2,6 @@
 
 ## [0.1.1](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.1.0...v0.1.1) (2026-05-26)
 
-
 ### Documentation
 
 * add AGENTS.md for AI coding agents ([05e46fb](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/05e46fba5f565f3ed62d74bffa0a7b4891560dc4))
