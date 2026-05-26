@@ -1,0 +1,21 @@
+# bacon.toml — run `bacon` from this directory
+#
+# Hot-reload workflow:
+#   1. Start Claude Code — MCP server launches via `cargo run`
+#   2. Run `bacon` here (default job: build)
+#   3. Edit src/* → bacon rebuilds → MCP server exits → Claude Code
+#      auto-restarts it with the new binary — no Claude restart needed.
+
+default_job = "build"
+
+[jobs.build]
+command = ["cargo", "build"]
+need_stdout = false
+
+[jobs.check]
+command = ["cargo", "check", "--all-targets"]
+need_stdout = false
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+need_stdout = false
