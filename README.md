@@ -182,10 +182,16 @@ prek run --all-files    # run all hooks against the whole tree
 
 ## Releases
 
-Releases are cut by [release-please][rp] using conventional-commit messages
-on `main`. The workflow runs on every push to `main` and maintains a release
-PR; merging that PR tags + creates a GitHub release and uploads prebuilt
-binaries (Linux/macOS, x86_64 + arm64).
+Releases are cut by [release-please][rp] using conventional-commit messages.
+Two branches feed it:
+
+- **`main`** — stable releases (`v0.2.0`, `v0.2.1`, …). Merging the
+  release PR tags + creates a GitHub release and uploads prebuilt binaries
+  (Linux/macOS, x86_64 + arm64).
+- **`develop`** — pre-releases (`v0.2.0-rc.1`, `v0.2.0-rc.2`, …). Tags are
+  cut and GH releases are marked "pre-release", but **no binaries are
+  uploaded** for prereleases — install from source or use `cargo install
+  --git ... --tag v0.2.0-rc.1` if you need to try one.
 
 Trigger manually with **Actions → Release → Run workflow** (workflow_dispatch).
 
