@@ -147,3 +147,5 @@ search [help.mikrotik.com](https://help.mikrotik.com) by topic.
   commit message.
 - Don't touch `Cargo.lock` by hand; let cargo manage it.
 - Don't disable lints to make CI pass.
+- Don't add AI attribution to commits. No `Co-Authored-By` trailers for AI
+  tools — commits are authored by the human who reviews and accepts the change.
