@@ -10,6 +10,13 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=512"]
 
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v8.17.3
+    hooks:
+      - id: cspell
+        name: cspell
+        args: ["--no-progress", "--no-summary", "--no-must-find-files"]
+
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
     rev: "3.6.1"
     hooks:

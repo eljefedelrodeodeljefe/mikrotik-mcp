@@ -64,7 +64,7 @@ If both are set, the API token takes precedence.
 ```sh
 MIKROTIK_HOST=192.168.88.1 \
 MIKROTIK_USER=admin \
-MIKROTIK_PASSWORD='s3cret' \
+MIKROTIK_PASSWORD='changeme' \
 mikrotik-mcp
 ```
 

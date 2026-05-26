@@ -31,7 +31,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install -g markdownlint-cli2@latest
+      - run: npm install -g cspell@latest markdownlint-cli2@latest
       - run: cargo +nightly install --locked prek
       - run: prek run --all-files
 
