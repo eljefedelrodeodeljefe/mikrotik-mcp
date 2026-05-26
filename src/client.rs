@@ -130,6 +130,19 @@ impl RouterosClient {
         Ok(())
     }
 
+    /// Creates a client pointing at an arbitrary base URL for use in tests.
+    /// The mock server URI (e.g. from wiremock) is used as the base; `/rest` is appended.
+    #[cfg(test)]
+    pub fn for_test(server_uri: &str) -> Self {
+        Self {
+            base_url: format!("{}/rest", server_uri.trim_end_matches('/')),
+            host: "localhost".to_string(),
+            username: "admin".to_string(),
+            password: "test".to_string(),
+            client: Client::builder().build().unwrap(),
+        }
+    }
+
     pub async fn delete(&self, path: &str, id: &str) -> Result<()> {
         // RouterOS item IDs are like "*1"; accept with or without the leading *.
         let id = if id.starts_with('*') {

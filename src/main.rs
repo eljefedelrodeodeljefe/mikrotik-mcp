@@ -6,6 +6,7 @@ mod client;
 mod error;
 mod params;
 mod server;
+mod tools;
 
 #[tokio::main]
 async fn main() -> Result<()> {
