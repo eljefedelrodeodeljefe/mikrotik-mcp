@@ -173,6 +173,23 @@ prek run --all-files    # run all hooks against the whole tree
 
 [prek]: https://github.com/j178/prek
 
+## Releases
+
+Releases are cut by [release-please][rp] using conventional-commit messages
+on `main`. The workflow runs on every push to `main` and maintains a release
+PR; merging that PR tags + creates a GitHub release and uploads prebuilt
+binaries (Linux/macOS, x86_64 + arm64).
+
+Trigger manually with **Actions → Release → Run workflow** (workflow_dispatch).
+
+Commit prefixes that affect the version:
+
+- `feat: …` → minor bump
+- `fix: …`, `perf: …` → patch bump
+- `feat!: …` or `BREAKING CHANGE:` footer → major bump
+
+[rp]: https://github.com/googleapis/release-please
+
 ## License
 
 MIT
