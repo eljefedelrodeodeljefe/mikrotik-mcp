@@ -39,3 +39,7 @@ changeme
 gitflow
 hotfixes
 stabilisation
+
+CDP
+LLDP
+MNDP
