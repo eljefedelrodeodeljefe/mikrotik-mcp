@@ -1,5 +1,9 @@
 # mikrotik-mcp
 
+> ⚠️ **Experimental.** APIs, tool surface, and config may change without
+> notice. That said, this is **actively used and actively developed** —
+> issues and PRs welcome, breakage will be fixed quickly.
+
 MCP (Model Context Protocol) server for MikroTik RouterOS. Exposes RouterOS
 operations as MCP tools so AI agents can query and manage MikroTik devices.
 
