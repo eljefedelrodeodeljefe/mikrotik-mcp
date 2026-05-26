@@ -65,7 +65,9 @@ mod tests {
             .await;
 
         let client = RouterosClient::for_test(&server.uri());
-        let p = GetInterfaceParams { name: "ether1".into() };
+        let p = GetInterfaceParams {
+            name: "ether1".into(),
+        };
         let result = get_interface(&client, &p).await.unwrap();
         assert_eq!(result["name"], "ether1");
     }

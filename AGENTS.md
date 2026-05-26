@@ -135,9 +135,9 @@ its terminology. Key references:
 | Routes | <https://help.mikrotik.com/docs/spaces/ROS/pages/328084/IP+Routing> |
 | DNS | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805404/DNS> |
 
-Links were last verified 2026-05-26. Re-check periodically — MikroTik reorganises their
-docs without redirects. Run `curl -sI <url> | grep -i location` to spot moved pages, or
-search [help.mikrotik.com](https://help.mikrotik.com) by topic.
+Links were last verified 2026-05-26. Re-check periodically — MikroTik moves pages
+without redirects. Run `curl -sI <url> | grep -i location` to spot moved pages,
+or search [help.mikrotik.com](https://help.mikrotik.com) by topic.
 
 ## Things to avoid
 

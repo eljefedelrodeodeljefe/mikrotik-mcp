@@ -2,7 +2,7 @@ use anyhow::Context;
 use rmcp::{
     ServerHandler,
     handler::server::wrapper::Parameters,
-    model::{CallToolResult, Content, ErrorData, ErrorCode, ServerCapabilities, ServerInfo},
+    model::{CallToolResult, Content, ErrorCode, ErrorData, ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router,
 };
 use serde_json::Value;
@@ -67,21 +67,52 @@ impl MikrotikServer {
             ))
         }
     }
+
+    fn require_field<'a>(value: &'a str, field: &str) -> Result<&'a str, ErrorData> {
+        if value.trim().is_empty() {
+            Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                format!("'{field}' is required and must not be empty"),
+                None,
+            ))
+        } else {
+            Ok(value)
+        }
+    }
 }
 
 #[tool_router]
 impl MikrotikServer {
     // ── System ────────────────────────────────────────────────────────────────
 
-    #[tool(description = "Get RouterOS system resources: CPU load, free memory, uptime, version, board name")]
+    #[tool(
+        description = "Get RouterOS system resources: CPU load, free memory, uptime, version, board name"
+    )]
     async fn get_system_resources(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::system::get_resources(&self.client).await.map_err(tool_error)?;
+        let data = tools::system::get_resources(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
     #[tool(description = "Get device identity (hostname)")]
     async fn get_system_identity(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::system::get_identity(&self.client).await.map_err(tool_error)?;
+        let data = tools::system::get_identity(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Set the device identity (hostname) — /system identity set name=...")]
+    async fn set_system_identity(
+        &self,
+        Parameters(p): Parameters<SetSystemIdentityParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        let data = tools::system::set_identity(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -90,7 +121,9 @@ impl MikrotikServer {
         &self,
         Parameters(p): Parameters<GetLogsParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let data = tools::system::get_logs(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::system::get_logs(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -125,9 +158,13 @@ impl MikrotikServer {
 
     // ── Interfaces ────────────────────────────────────────────────────────────
 
-    #[tool(description = "List all network interfaces with type, MAC address, MTU, and running status")]
+    #[tool(
+        description = "List all network interfaces with type, MAC address, MTU, and running status"
+    )]
     async fn list_interfaces(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::interfaces::list_interfaces(&self.client).await.map_err(tool_error)?;
+        let data = tools::interfaces::list_interfaces(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -146,7 +183,9 @@ impl MikrotikServer {
         &self,
         Parameters(p): Parameters<GetInterfaceParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        let data = tools::interfaces::get_interface(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::interfaces::get_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -154,7 +193,9 @@ impl MikrotikServer {
 
     #[tool(description = "List all IP addresses assigned to interfaces")]
     async fn list_ip_addresses(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::ip::list_addresses(&self.client).await.map_err(tool_error)?;
+        let data = tools::ip::list_addresses(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -164,7 +205,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<AddIpAddressParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        let data = tools::ip::add_address(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::ip::add_address(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -174,7 +217,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<RemoveByIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        tools::ip::remove_address(&self.client, &p.id).await.map_err(tool_error)?;
+        tools::ip::remove_address(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok_msg("removed"))
     }
 
@@ -182,7 +227,9 @@ impl MikrotikServer {
 
     #[tool(description = "List firewall filter rules (input / forward / output chains)")]
     async fn list_firewall_filter(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::firewall::list_filter(&self.client).await.map_err(tool_error)?;
+        let data = tools::firewall::list_filter(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -192,7 +239,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<AddFirewallFilterParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        let data = tools::firewall::add_filter(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::firewall::add_filter(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -202,7 +251,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<RemoveByIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        tools::firewall::remove_filter(&self.client, &p.id).await.map_err(tool_error)?;
+        tools::firewall::remove_filter(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok_msg("removed"))
     }
 
@@ -210,7 +261,9 @@ impl MikrotikServer {
 
     #[tool(description = "List NAT rules (srcnat / dstnat chains)")]
     async fn list_firewall_nat(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::firewall::list_nat(&self.client).await.map_err(tool_error)?;
+        let data = tools::firewall::list_nat(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -220,7 +273,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<AddFirewallNatParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        let data = tools::firewall::add_nat(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::firewall::add_nat(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -230,7 +285,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<RemoveByIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        tools::firewall::remove_nat(&self.client, &p.id).await.map_err(tool_error)?;
+        tools::firewall::remove_nat(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok_msg("removed"))
     }
 
@@ -238,13 +295,17 @@ impl MikrotikServer {
 
     #[tool(description = "List configured DHCP servers and their interfaces / address pools")]
     async fn list_dhcp_servers(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::dhcp::list_servers(&self.client).await.map_err(tool_error)?;
+        let data = tools::dhcp::list_servers(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
     #[tool(description = "List DHCP leases — both dynamic and static bindings")]
     async fn list_dhcp_leases(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::dhcp::list_leases(&self.client).await.map_err(tool_error)?;
+        let data = tools::dhcp::list_leases(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -254,7 +315,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<AddDhcpStaticLeaseParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        let data = tools::dhcp::add_static_lease(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::dhcp::add_static_lease(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -264,21 +327,29 @@ impl MikrotikServer {
         Parameters(p): Parameters<RemoveByIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        tools::dhcp::remove_lease(&self.client, &p.id).await.map_err(tool_error)?;
+        tools::dhcp::remove_lease(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok_msg("removed"))
     }
 
     // ── DNS ───────────────────────────────────────────────────────────────────
 
-    #[tool(description = "Get DNS settings: upstream servers, cache max TTL / size, DoH configuration")]
+    #[tool(
+        description = "Get DNS settings: upstream servers, cache max TTL / size, DoH configuration"
+    )]
     async fn get_dns_settings(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::dns::get_settings(&self.client).await.map_err(tool_error)?;
+        let data = tools::dns::get_settings(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
     #[tool(description = "List static DNS A records configured on the router")]
     async fn list_dns_static(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::dns::list_static(&self.client).await.map_err(tool_error)?;
+        let data = tools::dns::list_static(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -288,7 +359,9 @@ impl MikrotikServer {
         Parameters(p): Parameters<AddDnsStaticParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        let data = tools::dns::add_static(&self.client, &p).await.map_err(tool_error)?;
+        let data = tools::dns::add_static(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 
@@ -298,16 +371,51 @@ impl MikrotikServer {
         Parameters(p): Parameters<RemoveByIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        tools::dns::remove_static(&self.client, &p.id).await.map_err(tool_error)?;
+        tools::dns::remove_static(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok_msg("removed"))
     }
 
     // ── Routes & Neighbors ────────────────────────────────────────────────────
 
-    #[tool(description = "List IP routing table entries including active routes, gateway, and distance")]
+    #[tool(
+        description = "List IP routing table entries including active routes, gateway, and distance"
+    )]
     async fn list_routes(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::network::list_routes(&self.client).await.map_err(tool_error)?;
+        let data = tools::network::list_routes(&self.client)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add a static route to /ip/route — set distance=2 with check-gateway=ping \
+            for a failover route that becomes active only when the primary gateway is unreachable"
+    )]
+    async fn add_route(
+        &self,
+        Parameters(p): Parameters<AddRouteParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.dst_address, "dst_address")?;
+        Self::require_field(&p.gateway, "gateway")?;
+        let data = tools::network::add_route(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a static route by .id (from list_routes)")]
+    async fn remove_route(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::network::remove_route(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
     }
 
     #[tool(
@@ -315,7 +423,25 @@ impl MikrotikServer {
             — shows board model, identity, IP address, MAC, interface, and uptime for each neighbor"
     )]
     async fn list_neighbors(&self) -> Result<CallToolResult, ErrorData> {
-        let data = tools::network::list_neighbors(&self.client).await.map_err(tool_error)?;
+        let data = tools::network::list_neighbors(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    // ── LTE ───────────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Get LTE/5G modem info for the named interface — signal strength \
+            (RSRP, RSRQ, RSSI), operator, band, PIN status, and network registration state"
+    )]
+    async fn get_lte_info(
+        &self,
+        Parameters(p): Parameters<GetLteInfoParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data = tools::lte::get_lte_info(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
 }

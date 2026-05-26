@@ -7,10 +7,7 @@ pub async fn list_addresses(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/address").await
 }
 
-pub async fn add_address(
-    client: &RouterosClient,
-    p: &AddIpAddressParams,
-) -> anyhow::Result<Value> {
+pub async fn add_address(client: &RouterosClient, p: &AddIpAddressParams) -> anyhow::Result<Value> {
     let mut body = json!({"address": p.address, "interface": p.interface});
     if let Some(c) = &p.comment {
         body["comment"] = json!(c);
