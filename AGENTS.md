@@ -128,12 +128,16 @@ its terminology. Key references:
 | IP neighbors (CDP/LLDP/MNDP) | <https://help.mikrotik.com/docs/spaces/ROS/pages/8323118/IP+Neighbors> |
 | IP addresses | <https://help.mikrotik.com/docs/spaces/ROS/pages/328088/IP+Address> |
 | DHCP server | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805500/DHCP> |
-| Firewall filter & NAT | <https://help.mikrotik.com/docs/spaces/ROS/pages/328091/Firewall+Filter> |
+| Firewall filter | <https://help.mikrotik.com/docs/spaces/ROS/pages/48660574/Filter> |
 | Interfaces | <https://help.mikrotik.com/docs/spaces/ROS/pages/328155/Ethernet> |
 | Wireless (legacy) | <https://help.mikrotik.com/docs/spaces/ROS/pages/1409044/Wireless> |
 | CAPsMAN | <https://help.mikrotik.com/docs/spaces/ROS/pages/1409149/CAPsMAN> |
-| Routes | <https://help.mikrotik.com/docs/spaces/ROS/pages/328196/IP+Routing> |
+| Routes | <https://help.mikrotik.com/docs/spaces/ROS/pages/328084/IP+Routing> |
 | DNS | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805404/DNS> |
+
+Links were last verified 2026-05-26. Re-check periodically — MikroTik reorganises their
+docs without redirects. Run `curl -sI <url> | grep -i location` to spot moved pages, or
+search [help.mikrotik.com](https://help.mikrotik.com) by topic.
 
 ## Things to avoid
 
