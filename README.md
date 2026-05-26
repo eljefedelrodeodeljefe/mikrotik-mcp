@@ -24,10 +24,12 @@ The binary lands at `target/release/mikrotik-mcp`.
 
 ### With cargo install
 
+<!-- x-release-please-start-version -->
 ```sh
 cargo install --git https://github.com/eljefedelrodeodeljefe/mikrotik-mcp.git \
-  --tag v0.1.0 # x-release-please-version
+  --tag v0.1.0
 ```
+<!-- x-release-please-end -->
 
 This places `mikrotik-mcp` in `~/.cargo/bin/`.
 
