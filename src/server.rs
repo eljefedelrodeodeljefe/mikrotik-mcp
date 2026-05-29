@@ -291,6 +291,45 @@ impl MikrotikServer {
         Ok(Self::ok_msg("removed"))
     }
 
+    // ── Firewall — address list ───────────────────────────────────────────────
+
+    #[tool(description = "List firewall address-list entries (name, address, timeout, dynamic)")]
+    async fn list_firewall_address_list(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::firewall::list_address_list(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add an entry to a firewall address-list — an IP, CIDR subnet, or range \
+            grouped under a list name for use with src-address-list / dst-address-list matchers"
+    )]
+    async fn add_firewall_address_list(
+        &self,
+        Parameters(p): Parameters<AddFirewallAddressListParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.list, "list")?;
+        Self::require_field(&p.address, "address")?;
+        let data = tools::firewall::add_address_list(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a firewall address-list entry by .id")]
+    async fn remove_firewall_address_list(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::firewall::remove_address_list(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
     // ── DHCP ──────────────────────────────────────────────────────────────────
 
     #[tool(description = "List configured DHCP servers and their interfaces / address pools")]

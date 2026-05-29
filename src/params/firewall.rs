@@ -46,3 +46,17 @@ pub struct AddFirewallNatParams {
     #[schemars(description = "Optional comment")]
     pub comment: Option<String>,
 }
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AddFirewallAddressListParams {
+    #[schemars(
+        description = "Address list name (referenced by src-address-list / dst-address-list)"
+    )]
+    pub list: String,
+    #[schemars(description = "IP address, CIDR subnet, or range to add to the list")]
+    pub address: String,
+    #[schemars(description = "Optional timeout (e.g. '1h', '30m'); omit for a permanent entry")]
+    pub timeout: Option<String>,
+    #[schemars(description = "Optional comment")]
+    pub comment: Option<String>,
+}

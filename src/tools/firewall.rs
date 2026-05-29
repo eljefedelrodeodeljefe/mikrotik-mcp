@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
-use crate::params::{AddFirewallFilterParams, AddFirewallNatParams};
+use crate::params::{AddFirewallAddressListParams, AddFirewallFilterParams, AddFirewallNatParams};
 
 pub async fn list_filter(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/firewall/filter").await
@@ -33,7 +33,7 @@ pub async fn add_filter(
     if let Some(v) = p.disabled {
         body["disabled"] = json!(v);
     }
-    client.post("ip/firewall/filter", &body).await
+    client.put("ip/firewall/filter", &body).await
 }
 
 pub async fn remove_filter(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
@@ -70,11 +70,33 @@ pub async fn add_nat(client: &RouterosClient, p: &AddFirewallNatParams) -> anyho
     if let Some(v) = &p.comment {
         body["comment"] = json!(v);
     }
-    client.post("ip/firewall/nat", &body).await
+    client.put("ip/firewall/nat", &body).await
 }
 
 pub async fn remove_nat(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
     client.delete("ip/firewall/nat", id).await
+}
+
+pub async fn list_address_list(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("ip/firewall/address-list").await
+}
+
+pub async fn add_address_list(
+    client: &RouterosClient,
+    p: &AddFirewallAddressListParams,
+) -> anyhow::Result<Value> {
+    let mut body = json!({"list": p.list, "address": p.address});
+    if let Some(v) = &p.timeout {
+        body["timeout"] = json!(v);
+    }
+    if let Some(v) = &p.comment {
+        body["comment"] = json!(v);
+    }
+    client.put("ip/firewall/address-list", &body).await
+}
+
+pub async fn remove_address_list(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+    client.delete("ip/firewall/address-list", id).await
 }
 
 #[cfg(test)]
@@ -110,5 +132,98 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let result = list_nat(&client).await.unwrap();
         assert!(result.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_nat_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/firewall/nat"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*5", "chain": "srcnat", "action": "masquerade"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddFirewallNatParams {
+            chain: "srcnat".into(),
+            action: "masquerade".into(),
+            src_address: None,
+            dst_address: None,
+            protocol: None,
+            dst_port: None,
+            to_addresses: None,
+            to_ports: None,
+            out_interface: Some("bridge".into()),
+            comment: None,
+        };
+        let result = add_nat(&client, &p).await.unwrap();
+        assert_eq!(result["action"], "masquerade");
+    }
+
+    #[tokio::test]
+    async fn add_filter_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/firewall/filter"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*6", "chain": "input", "action": "accept"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddFirewallFilterParams {
+            chain: "input".into(),
+            action: "accept".into(),
+            src_address: None,
+            dst_address: None,
+            protocol: None,
+            dst_port: None,
+            in_interface: None,
+            comment: None,
+            disabled: None,
+        };
+        let result = add_filter(&client, &p).await.unwrap();
+        assert_eq!(result["action"], "accept");
+    }
+
+    #[tokio::test]
+    async fn list_address_list_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/ip/firewall/address-list"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {"list": "local-subnets", "address": "192.168.88.0/24"}
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_address_list(&client).await.unwrap();
+        assert_eq!(result.as_array().unwrap()[0]["list"], "local-subnets");
+    }
+
+    #[tokio::test]
+    async fn add_address_list_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/firewall/address-list"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*7", "list": "local-subnets", "address": "10.0.0.0/8"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddFirewallAddressListParams {
+            list: "local-subnets".into(),
+            address: "10.0.0.0/8".into(),
+            timeout: None,
+            comment: None,
+        };
+        let result = add_address_list(&client, &p).await.unwrap();
+        assert_eq!(result["list"], "local-subnets");
     }
 }
