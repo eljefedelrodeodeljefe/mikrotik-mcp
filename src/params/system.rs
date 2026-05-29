@@ -2,6 +2,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetSystemIdentityParams {
+    #[schemars(description = "New device identity (hostname), e.g. 'r-atl-5g'")]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct SaveBackupParams {
     #[schemars(description = "Backup name without extension (e.g. 'r-ap-1-2026-05-16')")]
     pub name: String,

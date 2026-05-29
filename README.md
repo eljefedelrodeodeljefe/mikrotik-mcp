@@ -64,6 +64,19 @@ commit them.
 
 If both are set, the API token takes precedence.
 
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MIKROTIK_PORT` | `443` | RouterOS REST API port |
+| `MIKROTIK_TLS_VERIFY` | `false` | Verify TLS certificate (`true`/`false`) |
+| `MIKROTIK_BACKUP_ENCRYPT` | `true` | Encrypt backups with `MIKROTIK_PASSWORD` |
+| `MIKROTIK_ALLOW_WRITES` | `false` | Enable mutating tools |
+
+`MIKROTIK_ALLOW_WRITES` is a convenience guard — it is not a security
+boundary. For genuine read-only enforcement, use a RouterOS user with
+`policy=read,api,rest-api` and no write policy.
+
 ## Injecting the secret
 
 ### Inline env

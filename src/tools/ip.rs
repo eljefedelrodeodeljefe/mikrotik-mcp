@@ -7,15 +7,12 @@ pub async fn list_addresses(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/address").await
 }
 
-pub async fn add_address(
-    client: &RouterosClient,
-    p: &AddIpAddressParams,
-) -> anyhow::Result<Value> {
+pub async fn add_address(client: &RouterosClient, p: &AddIpAddressParams) -> anyhow::Result<Value> {
     let mut body = json!({"address": p.address, "interface": p.interface});
     if let Some(c) = &p.comment {
         body["comment"] = json!(c);
     }
-    client.post("ip/address", &body).await
+    client.put("ip/address", &body).await
 }
 
 pub async fn remove_address(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
@@ -43,5 +40,26 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let result = list_addresses(&client).await.unwrap();
         assert_eq!(result.as_array().unwrap()[0]["address"], "192.168.1.1/24");
+    }
+
+    #[tokio::test]
+    async fn add_address_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/address"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*6", "address": "192.168.188.2/24", "interface": "bridge"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddIpAddressParams {
+            address: "192.168.188.2/24".into(),
+            interface: "bridge".into(),
+            comment: None,
+        };
+        let result = add_address(&client, &p).await.unwrap();
+        assert_eq!(result["address"], "192.168.188.2/24");
     }
 }

@@ -11,10 +11,7 @@ pub async fn list_static(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/dns/static").await
 }
 
-pub async fn add_static(
-    client: &RouterosClient,
-    p: &AddDnsStaticParams,
-) -> anyhow::Result<Value> {
+pub async fn add_static(client: &RouterosClient, p: &AddDnsStaticParams) -> anyhow::Result<Value> {
     let mut body = json!({"name": p.name, "address": p.address});
     if let Some(ttl) = p.ttl {
         body["ttl"] = json!(format!("{}s", ttl));
@@ -22,7 +19,7 @@ pub async fn add_static(
     if let Some(c) = &p.comment {
         body["comment"] = json!(c);
     }
-    client.post("ip/dns/static", &body).await
+    client.put("ip/dns/static", &body).await
 }
 
 pub async fn remove_static(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
@@ -66,5 +63,27 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let result = list_static(&client).await.unwrap();
         assert_eq!(result.as_array().unwrap()[0]["name"], "nas.home.arpa");
+    }
+
+    #[tokio::test]
+    async fn add_static_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/dns/static"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*3", "name": "nas.home.arpa", "address": "192.168.1.10"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddDnsStaticParams {
+            name: "nas.home.arpa".into(),
+            address: "192.168.1.10".into(),
+            ttl: None,
+            comment: None,
+        };
+        let result = add_static(&client, &p).await.unwrap();
+        assert_eq!(result["name"], "nas.home.arpa");
     }
 }

@@ -13,16 +13,39 @@ Rust 2024 edition (requires Rust 1.85+).
 
 ```text
 src/
-├── main.rs      # binary entry point, stdio transport wiring, hot-reload watcher
-├── server.rs    # MCP tool surface (declared with rmcp tool macros)
-├── client.rs    # RouterOS REST client (reqwest + rustls)
-├── params.rs    # serde/schemars input types for tools
-└── error.rs     # thiserror error type
+├── main.rs          # binary entry point, stdio transport wiring, hot-reload watcher
+├── server.rs        # thin MCP adapter — one #[tool] stub per tool, write gate
+├── client.rs        # RouterOS REST client (reqwest + rustls)
+├── error.rs         # error helpers
+├── params/          # serde/schemars input structs, one file per domain
+│   ├── mod.rs
+│   ├── shared.rs    # RemoveByIdParams (used by every remove_ tool)
+│   ├── system.rs
+│   ├── interfaces.rs
+│   ├── ip.rs
+│   ├── firewall.rs
+│   ├── dhcp.rs
+│   └── dns.rs
+└── tools/           # pure RouterOS logic — no MCP types, fully testable
+    ├── mod.rs
+    ├── system.rs
+    ├── interfaces.rs
+    ├── ip.rs
+    ├── firewall.rs
+    ├── dhcp.rs
+    ├── dns.rs
+    └── network.rs   # routes + neighbor discovery
 ```
 
-Add new MCP tools in `src/server.rs`. Add new RouterOS REST calls in
-`src/client.rs`. Input/output schemas go in `src/params.rs` so `schemars`
-can derive JSON Schema for the MCP tool catalog.
+**Adding a new tool:**
+
+1. Add a param struct to `src/params/{domain}.rs` (derive `Deserialize +
+   JsonSchema`).
+2. Add a pure function to `src/tools/{domain}.rs` — takes `&RouterosClient`
+   and any params, returns `anyhow::Result<Value>`. Add a wiremock test.
+3. Add a short `#[tool(description = "…")]` stub in the matching `impl`
+   block in `src/server.rs`. Call `self.guard_write()?` first for any
+   mutating tool.
 
 ## Build / run
 
@@ -135,9 +158,23 @@ its terminology. Key references:
 | Routes | <https://help.mikrotik.com/docs/spaces/ROS/pages/328084/IP+Routing> |
 | DNS | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805404/DNS> |
 
-Links were last verified 2026-05-26. Re-check periodically — MikroTik reorganises their
-docs without redirects. Run `curl -sI <url> | grep -i location` to spot moved pages, or
-search [help.mikrotik.com](https://help.mikrotik.com) by topic.
+Links were last verified 2026-05-26. Re-check periodically — MikroTik moves pages
+without redirects. Run `curl -sI <url> | grep -i location` to spot moved pages,
+or search [help.mikrotik.com](https://help.mikrotik.com) by topic.
+
+## Write gate
+
+Mutating tools return `INVALID_REQUEST` unless `MIKROTIK_ALLOW_WRITES=true`
+is set. This is a convenience guard, not a security boundary — real
+enforcement belongs at the RouterOS user level (`policy=read,api,rest-api`).
+
+When a write fails because the gate is closed, tell the user to set
+`MIKROTIK_ALLOW_WRITES=true` in the MCP config env block. Don't retry or
+work around it.
+
+Read current state before proposing any write. Confirm with the user before
+`remove_*` calls. Treat `restore_backup` as requiring explicit confirmation
+every time — the device reboots.
 
 ## Things to avoid
 

@@ -64,6 +64,25 @@ impl RouterosClient {
             .context("failed to parse JSON response")
     }
 
+    /// Adds a new item to a RouterOS menu (`PUT /rest/<menu>`). RouterOS maps
+    /// `PUT` to "add"; a bare `POST /rest/<menu>` is a print query and is
+    /// rejected for create payloads.
+    pub async fn put<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T> {
+        let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
+        self.client
+            .put(&url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(body)
+            .send()
+            .await
+            .context("request failed")?
+            .error_for_status()
+            .context("RouterOS returned error status")?
+            .json()
+            .await
+            .context("failed to parse JSON response")
+    }
+
     pub async fn post_void<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
         self.client
