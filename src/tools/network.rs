@@ -16,7 +16,7 @@ pub async fn add_route(client: &RouterosClient, p: &AddRouteParams) -> anyhow::R
     if let Some(v) = &p.comment {
         body["comment"] = json!(v);
     }
-    client.post("ip/route", &body).await
+    client.put("ip/route", &body).await
 }
 
 pub async fn remove_route(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
@@ -51,9 +51,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn add_route_posts_to_correct_path() {
+    async fn add_route_puts_to_correct_path() {
         let server = MockServer::start().await;
-        Mock::given(method("POST"))
+        Mock::given(method("PUT"))
             .and(path("/rest/ip/route"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 ".id": "*2",

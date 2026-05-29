@@ -6,7 +6,10 @@ use crate::params::GetLteInfoParams;
 pub async fn get_lte_info(client: &RouterosClient, p: &GetLteInfoParams) -> anyhow::Result<Value> {
     let iface = p.interface.as_deref().unwrap_or("lte1");
     client
-        .post("interface/lte/info", &json!({"number": iface}))
+        .post(
+            "interface/lte/monitor",
+            &json!({"numbers": iface, "once": "yes"}),
+        )
         .await
 }
 
@@ -18,15 +21,18 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
-    async fn get_lte_info_calls_correct_path() {
+    async fn get_lte_info_calls_monitor_endpoint() {
         let server = MockServer::start().await;
+        // RouterOS exposes modem status via `/interface/lte/monitor` (once),
+        // which returns a single-element array — there is no `lte/info` command.
         Mock::given(method("POST"))
-            .and(path("/rest/interface/lte/info"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            .and(path("/rest/interface/lte/monitor"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
                 "status": "connected",
-                "pin-status": "verified",
-                "operator": "Telekom.de"
-            })))
+                "pin-status": "ok",
+                "current-operator": "Telekom.de",
+                "data-class": "5G NSA"
+            }])))
             .mount(&server)
             .await;
 
@@ -35,7 +41,7 @@ mod tests {
             interface: Some("lte1".into()),
         };
         let result = get_lte_info(&client, &p).await.unwrap();
-        assert_eq!(result["status"], "connected");
-        assert_eq!(result["pin-status"], "verified");
+        assert_eq!(result.as_array().unwrap()[0]["status"], "connected");
+        assert_eq!(result.as_array().unwrap()[0]["data-class"], "5G NSA");
     }
 }

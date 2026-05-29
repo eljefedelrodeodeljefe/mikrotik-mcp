@@ -189,6 +189,73 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "Enable an interface — /interface enable. Accepts the interface name or .id."
+    )]
+    async fn enable_interface(
+        &self,
+        Parameters(p): Parameters<InterfaceNameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        tools::interfaces::enable_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("enabled"))
+    }
+
+    #[tool(
+        description = "Disable an interface — /interface disable. Accepts the interface name or .id. \
+            Disabling a WAN interface (e.g. pppoe-out1) withdraws its routes."
+    )]
+    async fn disable_interface(
+        &self,
+        Parameters(p): Parameters<InterfaceNameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        tools::interfaces::disable_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("disabled"))
+    }
+
+    #[tool(
+        description = "List interface-list members — which interfaces belong to which list (e.g. WAN, LAN)"
+    )]
+    async fn list_interface_list_members(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::interfaces::list_interface_list_members(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Add an interface to an interface list (e.g. add lte1 to WAN)")]
+    async fn add_interface_list_member(
+        &self,
+        Parameters(p): Parameters<AddInterfaceListMemberParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.list, "list")?;
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::interfaces::add_interface_list_member(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove an interface-list member by .id")]
+    async fn remove_interface_list_member(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::interfaces::remove_interface_list_member(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
     // ── IP Addresses ──────────────────────────────────────────────────────────
 
     #[tool(description = "List all IP addresses assigned to interfaces")]
@@ -286,6 +353,87 @@ impl MikrotikServer {
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
         tools::firewall::remove_nat(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
+    // ── Firewall — mangle ─────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List firewall mangle rules (prerouting / forward / postrouting marking, MSS)"
+    )]
+    async fn list_firewall_mangle(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::firewall::list_mangle(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add a firewall mangle rule — e.g. action=change-mss new-mss=clamp-to-pmtu \
+            protocol=tcp tcp-flags=syn out-interface-list=WAN to clamp MSS on a WAN/LTE uplink, \
+            or mark-connection / mark-routing for policy routing"
+    )]
+    async fn add_firewall_mangle(
+        &self,
+        Parameters(p): Parameters<AddFirewallMangleParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.chain, "chain")?;
+        Self::require_field(&p.action, "action")?;
+        let data = tools::firewall::add_mangle(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a firewall mangle rule by .id")]
+    async fn remove_firewall_mangle(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::firewall::remove_mangle(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
+    // ── Firewall — address list ───────────────────────────────────────────────
+
+    #[tool(description = "List firewall address-list entries (name, address, timeout, dynamic)")]
+    async fn list_firewall_address_list(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::firewall::list_address_list(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add an entry to a firewall address-list — an IP, CIDR subnet, or range \
+            grouped under a list name for use with src-address-list / dst-address-list matchers"
+    )]
+    async fn add_firewall_address_list(
+        &self,
+        Parameters(p): Parameters<AddFirewallAddressListParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.list, "list")?;
+        Self::require_field(&p.address, "address")?;
+        let data = tools::firewall::add_address_list(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a firewall address-list entry by .id")]
+    async fn remove_firewall_address_list(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::firewall::remove_address_list(&self.client, &p.id)
             .await
             .map_err(tool_error)?;
         Ok(Self::ok_msg("removed"))
