@@ -31,7 +31,7 @@ The binary lands at `target/release/mikrotik-mcp`.
 <!-- x-release-please-start-version -->
 ```sh
 cargo install --git https://github.com/eljefedelrodeodeljefe/mikrotik-mcp.git \
-  --tag v0.1.1
+  --tag v0.2.0
 ```
 <!-- x-release-please-end -->
 
