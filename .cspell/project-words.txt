@@ -24,8 +24,11 @@ Mikrotik
 MikroTik
 MIKROTIK
 MNDP
+pmtu
+postrouting
 pppoe
 prek
+prerouting
 # Project-specific words for cspell
 reorganises
 reqwest

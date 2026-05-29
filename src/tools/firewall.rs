@@ -1,7 +1,10 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
-use crate::params::{AddFirewallAddressListParams, AddFirewallFilterParams, AddFirewallNatParams};
+use crate::params::{
+    AddFirewallAddressListParams, AddFirewallFilterParams, AddFirewallMangleParams,
+    AddFirewallNatParams,
+};
 
 pub async fn list_filter(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/firewall/filter").await
@@ -75,6 +78,67 @@ pub async fn add_nat(client: &RouterosClient, p: &AddFirewallNatParams) -> anyho
 
 pub async fn remove_nat(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
     client.delete("ip/firewall/nat", id).await
+}
+
+pub async fn list_mangle(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("ip/firewall/mangle").await
+}
+
+pub async fn add_mangle(
+    client: &RouterosClient,
+    p: &AddFirewallMangleParams,
+) -> anyhow::Result<Value> {
+    let mut body = json!({"chain": p.chain, "action": p.action});
+    if let Some(v) = &p.new_mss {
+        body["new-mss"] = json!(v);
+    }
+    if let Some(v) = p.passthrough {
+        body["passthrough"] = json!(v);
+    }
+    if let Some(v) = &p.protocol {
+        body["protocol"] = json!(v);
+    }
+    if let Some(v) = &p.tcp_flags {
+        body["tcp-flags"] = json!(v);
+    }
+    if let Some(v) = &p.src_address {
+        body["src-address"] = json!(v);
+    }
+    if let Some(v) = &p.dst_address {
+        body["dst-address"] = json!(v);
+    }
+    if let Some(v) = &p.in_interface {
+        body["in-interface"] = json!(v);
+    }
+    if let Some(v) = &p.out_interface {
+        body["out-interface"] = json!(v);
+    }
+    if let Some(v) = &p.in_interface_list {
+        body["in-interface-list"] = json!(v);
+    }
+    if let Some(v) = &p.out_interface_list {
+        body["out-interface-list"] = json!(v);
+    }
+    if let Some(v) = &p.connection_mark {
+        body["connection-mark"] = json!(v);
+    }
+    if let Some(v) = &p.new_connection_mark {
+        body["new-connection-mark"] = json!(v);
+    }
+    if let Some(v) = &p.new_routing_mark {
+        body["new-routing-mark"] = json!(v);
+    }
+    if let Some(v) = &p.new_packet_mark {
+        body["new-packet-mark"] = json!(v);
+    }
+    if let Some(v) = &p.comment {
+        body["comment"] = json!(v);
+    }
+    client.put("ip/firewall/mangle", &body).await
+}
+
+pub async fn remove_mangle(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+    client.delete("ip/firewall/mangle", id).await
 }
 
 pub async fn list_address_list(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -225,5 +289,55 @@ mod tests {
         };
         let result = add_address_list(&client, &p).await.unwrap();
         assert_eq!(result["list"], "local-subnets");
+    }
+
+    #[tokio::test]
+    async fn list_mangle_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/ip/firewall/mangle"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_mangle(&client).await.unwrap();
+        assert!(result.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_mangle_puts_mss_clamp() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/firewall/mangle"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*4", "chain": "forward", "action": "change-mss",
+                "new-mss": "clamp-to-pmtu", "out-interface-list": "WAN"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddFirewallMangleParams {
+            chain: "forward".into(),
+            action: "change-mss".into(),
+            new_mss: Some("clamp-to-pmtu".into()),
+            passthrough: Some(true),
+            protocol: Some("tcp".into()),
+            tcp_flags: Some("syn".into()),
+            src_address: None,
+            dst_address: None,
+            in_interface: None,
+            out_interface: None,
+            in_interface_list: None,
+            out_interface_list: Some("WAN".into()),
+            connection_mark: None,
+            new_connection_mark: None,
+            new_routing_mark: None,
+            new_packet_mark: None,
+            comment: None,
+        };
+        let result = add_mangle(&client, &p).await.unwrap();
+        assert_eq!(result["new-mss"], "clamp-to-pmtu");
     }
 }
