@@ -19,7 +19,7 @@ pub async fn add_static_lease(
     if let Some(c) = &p.comment {
         body["comment"] = json!(c);
     }
-    client.post("ip/dhcp-server/lease", &body).await
+    client.put("ip/dhcp-server/lease", &body).await
 }
 
 pub async fn remove_lease(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
@@ -61,5 +61,26 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let result = list_leases(&client).await.unwrap();
         assert!(result.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn add_static_lease_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/ip/dhcp-server/lease"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*4", "mac-address": "AA:BB:CC:DD:EE:FF", "address": "192.168.88.50"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddDhcpStaticLeaseParams {
+            mac_address: "AA:BB:CC:DD:EE:FF".into(),
+            address: "192.168.88.50".into(),
+            comment: None,
+        };
+        let result = add_static_lease(&client, &p).await.unwrap();
+        assert_eq!(result["address"], "192.168.88.50");
     }
 }
