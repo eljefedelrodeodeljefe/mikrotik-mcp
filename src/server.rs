@@ -608,7 +608,9 @@ impl MikrotikServer {
 
     // ── SMB (file sharing) ────────────────────────────────────────────────────
 
-    #[tool(description = "Get SMB service state (/ip/smb): enabled, domain, bound interfaces, status")]
+    #[tool(
+        description = "Get SMB service state (/ip/smb): enabled, domain, bound interfaces, status"
+    )]
     async fn get_smb(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::smb::get_smb(&self.client)
             .await
@@ -643,7 +645,9 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
-    #[tool(description = "Add an SMB share (/ip/smb/shares) — name + directory (e.g. 'usb1-part1')")]
+    #[tool(
+        description = "Add an SMB share (/ip/smb/shares) — name + directory (e.g. 'usb1-part1')"
+    )]
     async fn add_smb_share(
         &self,
         Parameters(p): Parameters<AddSmbShareParams>,
@@ -694,7 +698,9 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
-    #[tool(description = "Update an SMB user (/ip/smb/users/set) by .id — password, read_only, disabled")]
+    #[tool(
+        description = "Update an SMB user (/ip/smb/users/set) by .id — password, read_only, disabled"
+    )]
     async fn set_smb_user(
         &self,
         Parameters(p): Parameters<SetSmbUserParams>,
