@@ -6,6 +6,7 @@ mod ip;
 mod lte;
 mod network;
 mod shared;
+mod smb;
 mod system;
 
 pub use dhcp::*;
@@ -16,4 +17,5 @@ pub use ip::*;
 pub use lte::*;
 pub use network::*;
 pub use shared::*;
+pub use smb::*;
 pub use system::*;

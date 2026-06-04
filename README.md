@@ -73,6 +73,9 @@ If both are set, the API token takes precedence.
 | `MIKROTIK_BACKUP_ENCRYPT` | `true` | Encrypt backups with `MIKROTIK_PASSWORD` |
 | `MIKROTIK_ALLOW_WRITES` | `false` | Enable mutating tools |
 
+The client picks HTTP for port 80 and HTTPS otherwise. If the device only
+has `www` (plain HTTP) enabled rather than `www-ssl`, set `MIKROTIK_PORT=80`.
+
 `MIKROTIK_ALLOW_WRITES` is a convenience guard — it is not a security
 boundary. For genuine read-only enforcement, use a RouterOS user with
 `policy=read,api,rest-api` and no write policy.

@@ -592,6 +592,138 @@ impl MikrotikServer {
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
     }
+
+    // ── Disk ──────────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List storage disks and partitions (/disk) — slot, type (hardware/partition), \
+            filesystem, model, size, and free space. Use this to find USB storage (e.g. usb1-part1)."
+    )]
+    async fn list_disks(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::disk::list_disks(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    // ── SMB (file sharing) ────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Get SMB service state (/ip/smb): enabled, domain, bound interfaces, status"
+    )]
+    async fn get_smb(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::smb::get_smb(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Configure the SMB service (/ip/smb set): enabled (yes/no/auto), domain, \
+            interfaces. SECURITY: 'interfaces' takes an interface NAME (e.g. 'bridge'), not an \
+            interface-list name. Bind to a LAN interface — 'all' exposes TCP 445 on the WAN/5G side."
+    )]
+    async fn set_smb(
+        &self,
+        Parameters(p): Parameters<SetSmbParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::smb::set_smb(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List SMB shares (/ip/smb/shares). RouterOS auto-creates one share per USB \
+            partition (directory == disk slot), so existing shares appear here without setup."
+    )]
+    async fn list_smb_shares(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::smb::list_shares(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add an SMB share (/ip/smb/shares) — name + directory (e.g. 'usb1-part1')"
+    )]
+    async fn add_smb_share(
+        &self,
+        Parameters(p): Parameters<AddSmbShareParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        Self::require_field(&p.directory, "directory")?;
+        let data = tools::smb::add_share(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove an SMB share by .id (from list_smb_shares)")]
+    async fn remove_smb_share(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::smb::remove_share(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
+    #[tool(description = "List SMB users (/ip/smb/users) — name, read-only, disabled state")]
+    async fn list_smb_users(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::smb::list_users(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add an SMB user (/ip/smb/users) — name + password. Access is read-only by \
+            default; set read_only=false to grant read-write."
+    )]
+    async fn add_smb_user(
+        &self,
+        Parameters(p): Parameters<AddSmbUserParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        Self::require_field(&p.password, "password")?;
+        let data = tools::smb::add_user(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Update an SMB user (/ip/smb/users/set) by .id — password, read_only, disabled"
+    )]
+    async fn set_smb_user(
+        &self,
+        Parameters(p): Parameters<SetSmbUserParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.id, "id")?;
+        let data = tools::smb::set_user(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove an SMB user by .id (from list_smb_users)")]
+    async fn remove_smb_user(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::smb::remove_user(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
 }
 
 #[tool_handler]
