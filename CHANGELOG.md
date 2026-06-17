@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.2.0...v0.3.0) (2026-06-04)
+
+
+### Features
+
+* add disk listing and SMB file-server tools ([ea29f5c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/ea29f5cc80ebbb3127eb1a399ee4f27140e1d4fe))
+* disk listing + SMB file-server tools ([5be0f3a](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/5be0f3a812f31f5433fac179eeb75bb1d6961de2))
+
 ## [0.2.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.1.1...v0.2.0) (2026-05-29)
 
 
