@@ -9,6 +9,15 @@ creds
 dstnat
 dtolnay
 editorconfig
+EID
+esim
+eUICC
+ICCID
+QENG
+QNWPREFCFG
+Quectel
+servingcell
+UICC
 eljefedelrodeodeljefe
 fasttrack
 gitflow

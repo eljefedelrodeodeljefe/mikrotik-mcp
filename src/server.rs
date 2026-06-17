@@ -128,6 +128,18 @@ impl MikrotikServer {
     }
 
     #[tool(
+        description = "Reboot the device — /system reboot. WARNING: drops all connectivity \
+            (incl. this MCP session) for ~1–2 minutes while it restarts."
+    )]
+    async fn reboot_router(&self) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let msg = tools::system::reboot(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&msg))
+    }
+
+    #[tool(
         description = "Save an encrypted binary .backup to the device, download it, and write it to a local path. Encrypted with MIKROTIK_PASSWORD by default."
     )]
     async fn save_backup(
@@ -481,6 +493,34 @@ impl MikrotikServer {
         Ok(Self::ok_msg("removed"))
     }
 
+    #[tool(
+        description = "List DHCP clients (/ip/dhcp-client) — per-interface WAN DHCP config incl. \
+            add-default-route, default-route-distance, and assigned address"
+    )]
+    async fn list_dhcp_clients(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::dhcp::list_clients(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Update a DHCP client (located by interface) — /ip dhcp-client set. Set \
+            add_default_route=false to manage the WAN default route statically (e.g. a \
+            check-gateway primary + LTE backup for failover)."
+    )]
+    async fn set_dhcp_client(
+        &self,
+        Parameters(p): Parameters<SetDhcpClientParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        let msg = tools::dhcp::set_client(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&msg))
+    }
+
     // ── DNS ───────────────────────────────────────────────────────────────────
 
     #[tool(
@@ -591,6 +631,193 @@ impl MikrotikServer {
             .await
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
+    }
+
+    // ── LTE — eSIM (eUICC) ─────────────────────────────────────────────────────
+
+    #[tool(description = "Select the active SIM slot, e.g. 'esim' or 'sim' — \
+            /interface lte settings set sim-slot=... . Switching to 'esim' is required \
+            before downloading an eSIM profile.")]
+    async fn set_lte_sim_slot(
+        &self,
+        Parameters(p): Parameters<SetSimSlotParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.sim_slot, "sim_slot")?;
+        let out = tools::lte::set_sim_slot(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "sim-slot set to '{}'\n{out}",
+            p.sim_slot
+        )))
+    }
+
+    #[tool(
+        description = "List eSIM (eUICC) profiles installed on the modem — name, ICCID, state, \
+            and .id for use with activate/deactivate/remove."
+    )]
+    async fn list_esim_profiles(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::lte::list_esim_profiles(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Get the modem's eUICC identifier (EID) for the named LTE interface")]
+    async fn get_esim_id(
+        &self,
+        Parameters(p): Parameters<LteInterfaceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let out = tools::lte::esim_id(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(out.trim()))
+    }
+
+    #[tool(
+        description = "Stage an eSIM profile download from an SM-DP+ server using an activation \
+            code (matching-id). WARNING: this CANNOT complete the install — RouterOS gates the \
+            final download behind an interactive y/N consent the REST API cannot supply, so the \
+            flow ends with 'user didn't approve', and a staged attempt can strand the profile in a \
+            'Bad profile state' on the server. To actually install a profile, run \
+            '/interface/lte/esim provision ...' in a router terminal and press 'y'. Use this tool \
+            for staging/diagnostics only; it reports the SM-DP+ status verbatim. Requires internet \
+            connectivity to reach the SM-DP+ server."
+    )]
+    async fn provision_esim(
+        &self,
+        Parameters(p): Parameters<ProvisionEsimParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.sm_dp_plus, "sm_dp_plus")?;
+        Self::require_field(&p.matching_id, "matching_id")?;
+        let out = tools::lte::provision_esim(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "eSIM provisioning result:\n{}",
+            out.trim()
+        )))
+    }
+
+    #[tool(
+        description = "Activate an installed eSIM profile by its number/.id (from list_esim_profiles)"
+    )]
+    async fn activate_esim_profile(
+        &self,
+        Parameters(p): Parameters<EsimProfileNumberParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.number, "number")?;
+        let out = tools::lte::activate_esim(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "eSIM profile {} activated\n{}",
+            p.number,
+            out.trim()
+        )))
+    }
+
+    #[tool(
+        description = "Deactivate an installed eSIM profile by its number/.id (from list_esim_profiles)"
+    )]
+    async fn deactivate_esim_profile(
+        &self,
+        Parameters(p): Parameters<EsimProfileNumberParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.number, "number")?;
+        let out = tools::lte::deactivate_esim(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "eSIM profile {} deactivated\n{}",
+            p.number,
+            out.trim()
+        )))
+    }
+
+    #[tool(
+        description = "Delete an installed eSIM profile from the modem by its number/.id (from list_esim_profiles)"
+    )]
+    async fn remove_esim_profile(
+        &self,
+        Parameters(p): Parameters<EsimProfileNumberParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.number, "number")?;
+        let out = tools::lte::delete_esim(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "eSIM profile {} deleted\n{}",
+            p.number,
+            out.trim()
+        )))
+    }
+
+    #[tool(
+        description = "Send a raw AT command to the LTE modem via /interface/lte/at-chat and \
+            return its output. Useful for diagnostics: 'AT+CSQ' (signal quality), \
+            'AT+QENG=\"servingcell\"' (serving cell / RSRP / band), 'AT+QNWPREFCFG=\"mode_pref\"' \
+            (query technology preference)."
+    )]
+    async fn lte_at_chat(
+        &self,
+        Parameters(p): Parameters<LteAtChatParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.command, "command")?;
+        let data = tools::lte::lte_at_chat(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Force the modem's radio technology — mode 'lte' (4G only), 'nr5g' (5G \
+            only), or 'auto'. Forcing 'lte' often fixes attach failures on 5G modems (e.g. RG650E) \
+            that wedge during NR negotiation. Sends AT+QNWPREFCFG=\"mode_pref\",<MODE> via at-chat."
+    )]
+    async fn set_lte_technology(
+        &self,
+        Parameters(p): Parameters<SetLteTechnologyParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.mode, "mode")?;
+        let data = tools::lte::set_technology(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List LTE APN profiles (/interface/lte/apn) — apn, add-default-route, \
+            default-route-distance, and which profile is the default"
+    )]
+    async fn list_lte_apn_profiles(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::lte::list_apn_profiles(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Update an LTE APN profile (by name, or the default profile) — \
+            /interface lte apn set. Set default_route_distance=2 (or add_default_route=false) to \
+            make LTE a backup WAN behind a distance-1 primary."
+    )]
+    async fn set_lte_apn_profile(
+        &self,
+        Parameters(p): Parameters<SetLteApnProfileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let msg = tools::lte::set_apn_profile(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&msg))
     }
 
     // ── Disk ──────────────────────────────────────────────────────────────────

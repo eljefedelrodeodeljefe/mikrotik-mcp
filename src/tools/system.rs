@@ -10,6 +10,21 @@ pub async fn get_resources(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/resource").await
 }
 
+/// Reboots the device — `/system reboot`. The REST call typically drops as the
+/// device restarts, so a transport-level failure is treated as success; only a
+/// real HTTP error (e.g. permission denied) is propagated.
+pub async fn reboot(client: &RouterosClient) -> anyhow::Result<String> {
+    match client.post_text("system/reboot", &json!({})).await {
+        Ok(_) => Ok("reboot accepted — device is rebooting".to_string()),
+        // A dropped connection (no "RouterOS returned <status>") is the expected
+        // outcome as the device goes down mid-request.
+        Err(e) if !e.to_string().contains("RouterOS returned") => {
+            Ok("reboot initiated — connection dropped as the device restarts".to_string())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 pub async fn get_identity(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/identity").await
 }
@@ -119,6 +134,33 @@ mod tests {
     use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn reboot_posts_to_reboot_and_succeeds() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/reboot"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let msg = reboot(&client).await.unwrap();
+        assert!(msg.contains("reboot"), "got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn reboot_propagates_http_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/reboot"))
+            .respond_with(ResponseTemplate::new(403).set_body_string("forbidden"))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        assert!(reboot(&client).await.is_err());
+    }
 
     #[tokio::test]
     async fn get_resources_calls_correct_path() {
