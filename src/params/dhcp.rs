@@ -2,6 +2,24 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct AddDhcpClientParams {
+    #[schemars(description = "Interface to run the DHCP client on (e.g. 'wifi3')")]
+    pub interface: String,
+    #[schemars(
+        description = "Whether to install a default route from the DHCP lease. \
+            Set true and use default_route_distance to control failover priority."
+    )]
+    pub add_default_route: Option<bool>,
+    #[schemars(
+        description = "Administrative distance for the DHCP-installed default route (1–255). \
+            Use distance=3 for a tertiary fallback behind a primary (dist 1) and LTE backup (dist 2)."
+    )]
+    pub default_route_distance: Option<u8>,
+    #[schemars(description = "Whether to use DNS servers advertised by the DHCP server")]
+    pub use_peer_dns: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct AddDhcpStaticLeaseParams {
     #[schemars(description = "Client MAC address (e.g. 'AA:BB:CC:DD:EE:FF')")]
     pub mac_address: String,

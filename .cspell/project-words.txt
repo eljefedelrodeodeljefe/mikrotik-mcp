@@ -1,5 +1,16 @@
 
 airdress
+SSID
+ssid
+VIF
+wpa
+WPA
+BSSID
+bssid
+pvid
+hotspot
+Hotspot
+testpassword
 capsman
 CDP
 changeme

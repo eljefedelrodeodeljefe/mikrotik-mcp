@@ -238,6 +238,33 @@ masquerade rule already follows), a link/gateway failover looks like:
 ether1 is used while its gateway answers ping; when it stops, that route goes
 inactive and LTE (distance 2) takes over, reclaiming once ether1 recovers.
 
+## Wi-Fi (APs, virtual APs, station VIFs)
+
+`list_wifi_interfaces` / `scan_wifi`, security profiles
+(`list_wifi_security` / `add_wifi_security`), and interface lifecycle
+(`set_wifi_interface` / `remove_wifi_interface`). Two VIF builders sit on top of
+an existing radio (`master-interface`):
+
+- `add_wifi_station` — a station VIF that connects upstream (e.g. wifi3 on wifi1
+  to a phone hotspot as a tertiary WAN).
+- `add_wifi_ap` — an extra AP SSID (second BSSID) on the same radio. Reference
+  the master's security profile to make it a true alias — edit the profile once
+  and both SSIDs update.
+
+Give a new AP SSID LAN access with the bridge-port tools
+(`list_bridge_ports` / `add_bridge_port` / `remove_bridge_port`). To add a second
+"Spine" SSID aliasing an existing 2.4 GHz AP on `wifi2`:
+
+1. `add_wifi_ap name=spine master_interface=wifi2 ssid=Spine security="Quick Set"`
+2. `add_bridge_port bridge=bridge interface=spine pvid=1`
+
+A virtual AP's interface `running` flag stays `false` until a client associates
+even while it is beaconing — confirm it's up via the radio state, not that flag.
+
+The `list_files` / `remove_file` tools round out backup hygiene: after
+`save_backup` downloads a `.backup` locally, `remove_file` clears the on-device
+copy.
+
 ## Development
 
 Pre-commit hooks (rustfmt, clippy, editorconfig, markdownlint, basic

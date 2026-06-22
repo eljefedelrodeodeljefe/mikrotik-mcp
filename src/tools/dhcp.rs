@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
-use crate::params::{AddDhcpStaticLeaseParams, SetDhcpClientParams};
+use crate::params::{AddDhcpClientParams, AddDhcpStaticLeaseParams, SetDhcpClientParams};
 
 pub async fn list_servers(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/dhcp-server").await
@@ -65,6 +65,37 @@ pub async fn add_static_lease(
 
 pub async fn remove_lease(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
     client.delete("ip/dhcp-server/lease", id).await
+}
+
+/// Removes a DHCP client, located by interface name — `/ip dhcp-client remove`.
+pub async fn remove_client(client: &RouterosClient, interface: &str) -> anyhow::Result<()> {
+    let clients = list_clients(client).await?;
+    let id = clients
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|c| c.get("interface").and_then(Value::as_str) == Some(interface))
+        .and_then(|c| c.get(".id").and_then(Value::as_str))
+        .ok_or_else(|| anyhow::anyhow!("no DHCP client on interface '{}'", interface))?
+        .to_string();
+    client.delete("ip/dhcp-client", &id).await
+}
+
+/// Adds a new DHCP client on `interface` — `/ip dhcp-client add`.
+/// Set `add_default_route=true` and `default_route_distance` to integrate it
+/// into the failover routing stack.
+pub async fn add_client(client: &RouterosClient, p: &AddDhcpClientParams) -> anyhow::Result<Value> {
+    let mut body = json!({ "interface": p.interface });
+    if let Some(b) = p.add_default_route {
+        body["add-default-route"] = json!(yes_no(b));
+    }
+    if let Some(d) = p.default_route_distance {
+        body["default-route-distance"] = json!(d.to_string());
+    }
+    if let Some(b) = p.use_peer_dns {
+        body["use-peer-dns"] = json!(yes_no(b));
+    }
+    client.put("ip/dhcp-client", &body).await
 }
 
 #[cfg(test)]

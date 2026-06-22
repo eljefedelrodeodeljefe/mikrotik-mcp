@@ -256,6 +256,55 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "List bridge ports (/interface/bridge/port) — which interfaces are \
+            bridged, their bridge, pvid, and status (e.g. in-bridge)."
+    )]
+    async fn list_bridge_ports(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::interfaces::list_bridge_ports(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add an interface to a bridge (/interface/bridge/port add). Use after \
+            add_wifi_ap so a new virtual-AP SSID can pass LAN traffic. pvid defaults to the \
+            bridge default (usually 1) when omitted."
+    )]
+    async fn add_bridge_port(
+        &self,
+        Parameters(p): Parameters<AddBridgePortParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.bridge, "bridge")?;
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::interfaces::add_bridge_port(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Remove an interface from the bridge (/interface/bridge/port remove), \
+            located by interface name. Required before converting a bridged AP wifi interface \
+            to station/WAN mode — a WAN interface must not be a bridge slave."
+    )]
+    async fn remove_bridge_port(
+        &self,
+        Parameters(p): Parameters<InterfaceNameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        tools::interfaces::remove_bridge_port(&self.client, &p.interface)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "{} removed from bridge",
+            p.interface
+        )))
+    }
+
     #[tool(description = "Remove an interface-list member by .id")]
     async fn remove_interface_list_member(
         &self,
@@ -519,6 +568,43 @@ impl MikrotikServer {
             .await
             .map_err(tool_error)?;
         Ok(Self::ok_msg(&msg))
+    }
+
+    #[tool(
+        description = "Remove a DHCP client by interface name — /ip dhcp-client remove. \
+            Use when tearing down a WAN interface (e.g. wifi3) to clean up its DHCP config."
+    )]
+    async fn remove_dhcp_client(
+        &self,
+        Parameters(p): Parameters<InterfaceNameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        tools::dhcp::remove_client(&self.client, &p.interface)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "DHCP client on {} removed",
+            p.interface
+        )))
+    }
+
+    #[tool(
+        description = "Add a new DHCP client on an interface — /ip dhcp-client add. Use this to \
+            add DHCP on a newly created interface (e.g. a wifi station VIF). Set \
+            add_default_route=true and default_route_distance to integrate into failover routing \
+            (e.g. distance=3 for a tertiary hotspot behind ether1 primary and lte1 backup)."
+    )]
+    async fn add_dhcp_client(
+        &self,
+        Parameters(p): Parameters<AddDhcpClientParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::dhcp::add_client(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
     }
 
     // ── DNS ───────────────────────────────────────────────────────────────────
@@ -818,6 +904,178 @@ impl MikrotikServer {
             .await
             .map_err(tool_error)?;
         Ok(Self::ok_msg(&msg))
+    }
+
+    // ── WiFi ──────────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List wifi interfaces (/interface/wifi) — name, mode (ap/station), \
+            master-interface, SSID, MAC address, and running state. Use this to inspect \
+            both AP interfaces and any station VIFs added for upstream connectivity."
+    )]
+    async fn list_wifi_interfaces(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_interfaces(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Run a passive wifi scan on an interface (/interface/wifi/scan) and \
+            return visible APs with SSID, BSSID, channel, signal strength, and security. \
+            Use wifi1 (5 GHz) or wifi2 (2.4 GHz). Duration defaults to 5 seconds."
+    )]
+    async fn scan_wifi(
+        &self,
+        Parameters(p): Parameters<ScanWifiParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Self::require_field(&p.interface, "interface")?;
+        let result = tools::wifi::scan_wifi(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&result))
+    }
+
+    #[tool(
+        description = "List wifi security profiles (/interface/wifi/security) — name, \
+            authentication-types, and passphrase. Use these profile names in add_wifi_station."
+    )]
+    async fn list_wifi_security(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_security(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Create a named wifi security profile (/interface/wifi/security add) — \
+            stores SSID credentials so they can be referenced by name in add_wifi_station. \
+            authentication_types defaults to 'wpa2-psk'; use 'wpa2-psk,wpa3-psk' for mixed."
+    )]
+    async fn add_wifi_security(
+        &self,
+        Parameters(p): Parameters<AddWifiSecurityParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        Self::require_field(&p.passphrase, "passphrase")?;
+        let data = tools::wifi::add_wifi_security(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Modify an existing wifi interface (/interface/wifi set) — change mode, \
+            SSID, or security profile. Use mode='station' + ssid + security to convert an \
+            idle AP radio to a standalone WAN uplink (e.g. connecting wifi1 to a phone \
+            hotspot). Call remove_bridge_port first if the interface is currently in the \
+            LAN bridge."
+    )]
+    async fn set_wifi_interface(
+        &self,
+        Parameters(p): Parameters<SetWifiInterfaceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        let msg = tools::wifi::set_wifi_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&msg))
+    }
+
+    #[tool(
+        description = "Remove a wifi interface by name (/interface/wifi remove). \
+            Use this to clean up a station VIF (e.g. wifi3) after migrating to a \
+            standalone interface."
+    )]
+    async fn remove_wifi_interface(
+        &self,
+        Parameters(p): Parameters<WifiNameParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        tools::wifi::remove_wifi_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!(
+            "wifi interface '{}' removed",
+            p.name
+        )))
+    }
+
+    #[tool(
+        description = "Add a virtual wifi station interface on top of an existing radio \
+            (/interface/wifi add mode=station). The master radio keeps serving as an AP; \
+            this VIF connects upstream to the named SSID. Typical use: wifi3 on master \
+            wifi1 to connect to a phone hotspot as a tertiary WAN. Pair with \
+            add_dhcp_client (distance=3) and add_interface_list_member (list=WAN) to \
+            complete failover integration."
+    )]
+    async fn add_wifi_station(
+        &self,
+        Parameters(p): Parameters<AddWifiStationParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        Self::require_field(&p.master_interface, "master_interface")?;
+        Self::require_field(&p.ssid, "ssid")?;
+        let data = tools::wifi::add_wifi_station(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add a virtual AP interface on top of an existing radio \
+            (/interface/wifi add mode=ap) to broadcast an additional SSID (second BSSID) \
+            on the same radio. Reference the master interface's security profile to make \
+            it a true alias (edit the profile once, both SSIDs update). Follow with \
+            add_bridge_port to give the new SSID LAN access."
+    )]
+    async fn add_wifi_ap(
+        &self,
+        Parameters(p): Parameters<AddWifiApParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        Self::require_field(&p.master_interface, "master_interface")?;
+        Self::require_field(&p.ssid, "ssid")?;
+        let data = tools::wifi::add_wifi_ap(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    // ── Files ───────────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List files on the device (/file) — name, type, size, creation time. \
+            Use to find backup files left on the device (e.g. after save_backup) before \
+            cleaning them up with remove_file."
+    )]
+    async fn list_files(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::files::list_files(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Remove a file from the device by name (/file remove), resolved via \
+            list_files. Typical use: delete the on-device backup file left behind after \
+            save_backup has downloaded it locally."
+    )]
+    async fn remove_file(
+        &self,
+        Parameters(p): Parameters<RemoveFileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        tools::files::remove_file(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&format!("file '{}' removed", p.name)))
     }
 
     // ── Disk ──────────────────────────────────────────────────────────────────

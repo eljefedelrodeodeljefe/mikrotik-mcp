@@ -66,21 +66,24 @@ impl RouterosClient {
 
     /// Adds a new item to a RouterOS menu (`PUT /rest/<menu>`). RouterOS maps
     /// `PUT` to "add"; a bare `POST /rest/<menu>` is a print query and is
-    /// rejected for create payloads.
+    /// rejected for create payloads. HTTP error bodies are surfaced verbatim
+    /// (same as `post_text`) so RouterOS validation errors are visible.
     pub async fn put<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        self.client
+        let resp = self
+            .client
             .put(&url)
             .basic_auth(&self.username, Some(&self.password))
             .json(body)
             .send()
             .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?
-            .json()
-            .await
-            .context("failed to parse JSON response")
+            .context("request failed")?;
+        let status = resp.status();
+        let text = resp.text().await.context("failed to read response body")?;
+        if !status.is_success() {
+            anyhow::bail!("RouterOS returned {}: {}", status.as_u16(), text.trim());
+        }
+        serde_json::from_str(&text).context("failed to parse JSON response")
     }
 
     pub async fn post_void<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
