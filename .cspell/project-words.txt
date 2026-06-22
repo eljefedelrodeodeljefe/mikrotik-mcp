@@ -1,5 +1,16 @@
 
 airdress
+SSID
+ssid
+VIF
+wpa
+WPA
+BSSID
+bssid
+pvid
+hotspot
+Hotspot
+testpassword
 capsman
 CDP
 changeme
@@ -9,6 +20,15 @@ creds
 dstnat
 dtolnay
 editorconfig
+EID
+esim
+eUICC
+ICCID
+QENG
+QNWPREFCFG
+Quectel
+servingcell
+UICC
 eljefedelrodeodeljefe
 fasttrack
 gitflow

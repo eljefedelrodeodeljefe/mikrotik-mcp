@@ -183,6 +183,88 @@ Workflow:
 
 Other jobs: `bacon check`, `bacon clippy`.
 
+## eSIM (eUICC) provisioning
+
+Tools are provided to manage eSIM profiles on modems with an eUICC chip
+(e.g. the Chateau 5G R17 ax / Quectel RG650E): `set_lte_sim_slot`,
+`list_esim_profiles`, `get_esim_id`, `provision_esim`,
+`activate_esim_profile`, `deactivate_esim_profile`, `remove_esim_profile`.
+
+Typical flow: `set_lte_sim_slot esim` → `provision_esim` → `list_esim_profiles`.
+
+> [!IMPORTANT]
+> **`provision_esim` cannot complete a profile install over REST.** RouterOS
+> gates the final download behind an interactive end-user consent (the `y/N`
+> prompt you answer in a CLI terminal), and the REST API has no parameter to
+> supply it. A REST `provision` runs through SM-DP+ authentication and staging,
+> then ends with `user didn't approve`. Worse, that staged-but-unapproved
+> session **advances the profile's state on the SM-DP+** and can strand it in a
+> non-`Released` state — subsequent attempts then fail with
+> `Bad profile state (reason code 1.2)` until the server session expires or the
+> operator releases the profile.
+>
+> To actually download/install a profile, run it from a router terminal and
+> press `y`:
+>
+> ```text
+> /interface/lte/esim provision interface=lte1 \
+>   sm-dp-plus="<sm-dp+ host>" matching-id="<activation code>"
+> ```
+>
+> `provision_esim` is therefore intended for **staging/diagnostics**: it detects
+> the `user didn't approve` and `Bad profile state` outcomes and returns the
+> SM-DP+ `subjectCode`/`reasonCode`/`message` with guidance, rather than
+> reporting a half-finished stream as success.
+
+Some modems also do not answer `esim-id` (EID query) over REST and will return
+an error status for `get_esim_id`; this is a modem/firmware limitation, not a
+transport bug.
+
+## WAN failover (LTE as backup)
+
+Tools to wire LTE up as a backup WAN behind a wired primary:
+`list_dhcp_clients` / `set_dhcp_client` (the `set` tool locates the client by
+interface), and `list_lte_apn_profiles` / `set_lte_apn_profile` (locates the
+profile by name, or the default profile). Combined with `add_route`
+(`check_gateway=ping`, `distance`) and the `WAN` interface list (which the
+masquerade rule already follows), a link/gateway failover looks like:
+
+1. Primary `ether1` default route at distance 1 with `check_gateway=ping`
+   (`add_route`); stop the DHCP client adding its own un-checked route:
+   `set_dhcp_client interface=ether1 add_default_route=false`.
+2. LTE default route at distance 2 — either `add_route gateway=lte1 distance=2`,
+   or `set_lte_apn_profile default_route_distance=2`.
+
+ether1 is used while its gateway answers ping; when it stops, that route goes
+inactive and LTE (distance 2) takes over, reclaiming once ether1 recovers.
+
+## Wi-Fi (APs, virtual APs, station VIFs)
+
+`list_wifi_interfaces` / `scan_wifi`, security profiles
+(`list_wifi_security` / `add_wifi_security`), and interface lifecycle
+(`set_wifi_interface` / `remove_wifi_interface`). Two VIF builders sit on top of
+an existing radio (`master-interface`):
+
+- `add_wifi_station` — a station VIF that connects upstream (e.g. wifi3 on wifi1
+  to a phone hotspot as a tertiary WAN).
+- `add_wifi_ap` — an extra AP SSID (second BSSID) on the same radio. Reference
+  the master's security profile to make it a true alias — edit the profile once
+  and both SSIDs update.
+
+Give a new AP SSID LAN access with the bridge-port tools
+(`list_bridge_ports` / `add_bridge_port` / `remove_bridge_port`). To add a second
+"Spine" SSID aliasing an existing 2.4 GHz AP on `wifi2`:
+
+1. `add_wifi_ap name=spine master_interface=wifi2 ssid=Spine security="Quick Set"`
+2. `add_bridge_port bridge=bridge interface=spine pvid=1`
+
+A virtual AP's interface `running` flag stays `false` until a client associates
+even while it is beaconing — confirm it's up via the radio state, not that flag.
+
+The `list_files` / `remove_file` tools round out backup hygiene: after
+`save_backup` downloads a `.backup` locally, `remove_file` clears the on-device
+copy.
+
 ## Development
 
 Pre-commit hooks (rustfmt, clippy, editorconfig, markdownlint, basic

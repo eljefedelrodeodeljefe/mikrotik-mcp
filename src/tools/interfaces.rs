@@ -1,7 +1,9 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
-use crate::params::{AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams};
+use crate::params::{
+    AddBridgePortParams, AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams,
+};
 
 pub async fn list_interfaces(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("interface").await
@@ -56,11 +58,52 @@ pub async fn remove_interface_list_member(client: &RouterosClient, id: &str) -> 
     client.delete("interface/list/member", id).await
 }
 
+/// Lists bridge ports — `/interface/bridge/port`. Shows which interfaces are
+/// bridged, their bridge, pvid, and status (e.g. `in-bridge`).
+pub async fn list_bridge_ports(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("interface/bridge/port").await
+}
+
+/// Adds an interface to a bridge — `/interface/bridge/port add`. Use after
+/// creating a virtual AP (`add_wifi_ap`) so the new SSID reaches the LAN.
+pub async fn add_bridge_port(
+    client: &RouterosClient,
+    p: &AddBridgePortParams,
+) -> anyhow::Result<Value> {
+    let mut body = json!({
+        "bridge": p.bridge,
+        "interface": p.interface,
+    });
+    if let Some(pvid) = p.pvid {
+        body["pvid"] = json!(pvid);
+    }
+    if let Some(comment) = &p.comment {
+        body["comment"] = json!(comment);
+    }
+    client.put("interface/bridge/port", &body).await
+}
+
+/// Removes an interface from the bridge — `/interface/bridge/port remove`.
+/// Resolves by interface name. Required before converting a bridged AP interface
+/// to station mode (a WAN interface must not be in the LAN bridge).
+pub async fn remove_bridge_port(client: &RouterosClient, interface: &str) -> anyhow::Result<()> {
+    let ports: Value = client.get("interface/bridge/port").await?;
+    let id = ports
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|p| p.get("interface").and_then(Value::as_str) == Some(interface))
+        .and_then(|p| p.get(".id").and_then(Value::as_str))
+        .ok_or_else(|| anyhow::anyhow!("'{}' is not a bridge port", interface))?
+        .to_string();
+    client.delete("interface/bridge/port", &id).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -176,5 +219,48 @@ mod tests {
         };
         let result = add_interface_list_member(&client, &p).await.unwrap();
         assert_eq!(result["list"], "WAN");
+    }
+
+    #[tokio::test]
+    async fn list_bridge_ports_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/interface/bridge/port"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {".id": "*1", "bridge": "bridge", "interface": "wifi2", "pvid": "1"}
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_bridge_ports(&client).await.unwrap();
+        assert_eq!(result.as_array().unwrap()[0]["interface"], "wifi2");
+    }
+
+    #[tokio::test]
+    async fn add_bridge_port_puts_to_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/interface/bridge/port"))
+            .and(body_json(json!({
+                "bridge": "bridge",
+                "interface": "spine-guest",
+                "pvid": 1
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                ".id": "*7", "bridge": "bridge", "interface": "spine-guest"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddBridgePortParams {
+            bridge: "bridge".into(),
+            interface: "spine-guest".into(),
+            pvid: Some(1),
+            comment: None,
+        };
+        let result = add_bridge_port(&client, &p).await.unwrap();
+        assert_eq!(result["interface"], "spine-guest");
     }
 }
