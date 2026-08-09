@@ -1,0 +1,206 @@
+name: SBOM + vulnerability scan
+
+# Generates a CycloneDX + SPDX SBOM for this crate's dependency tree and scans it for
+# known vulnerabilities.
+#
+# `mode` controls enforcement:
+#   informational — never fails. Used at release time, so a finding can't block shipping.
+#   gating        — fails on CRITICAL/HIGH findings that have a fix available. Used by the
+#                   weekly schedule, which is this repo's only gating point.
+#
+# The split exists so a release is never blocked by a finding there may be no fix for,
+# while still guaranteeing a recurring check that does bite. See AGENTS.md § Security
+# scanning for the triage rules.
+
+on:
+  schedule:
+    # Weekly, Monday 06:17 UTC. Off-the-hour to avoid the scheduling stampede.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "informational | gating"
+        type: choice
+        options: [gating, informational]
+        default: gating
+  workflow_call:
+    inputs:
+      mode:
+        description: "informational (never fails) | gating (fails on CRITICAL/HIGH with fix available)"
+        type: string
+        required: true
+      upload-to-release:
+        description: "Tag of a GitHub Release to attach the SBOMs to. Empty = artifact only."
+        type: string
+        required: false
+        default: ""
+    outputs:
+      finding-count-critical:
+        value: ${{ jobs.scan.outputs.finding-count-critical }}
+      finding-count-high:
+        value: ${{ jobs.scan.outputs.finding-count-high }}
+      finding-count-medium:
+        value: ${{ jobs.scan.outputs.finding-count-medium }}
+      finding-count-low:
+        value: ${{ jobs.scan.outputs.finding-count-low }}
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Generate SBOM + scan for CVEs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # only used when attaching SBOMs to a release
+    outputs:
+      finding-count-critical: ${{ steps.grype-scan.outputs.finding-count-critical }}
+      finding-count-high: ${{ steps.grype-scan.outputs.finding-count-high }}
+      finding-count-medium: ${{ steps.grype-scan.outputs.finding-count-medium }}
+      finding-count-low: ${{ steps.grype-scan.outputs.finding-count-low }}
+    env:
+      # Resolved mode: workflow_call passes it explicitly; schedule has no inputs at all,
+      # so it falls through to gating.
+      MODE: ${{ inputs.mode || 'gating' }}
+    steps:
+      # Actions in this workflow are pinned by commit SHA, not by tag. Tags are mutable —
+      # a workflow whose entire purpose is supply-chain assurance must not itself depend on
+      # a mutable reference. The rest of the repo pins by major tag; that difference is
+      # deliberate and documented in AGENTS.md.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Syft and Grype are installed from pinned, checksum-verified release tarballs rather
+      # than a wrapper Action or a curl-pipe-to-sh installer. A scanner that exists to
+      # police the supply chain must not be installed through an unverified one.
+      - name: Install Syft (pinned, checksum-verified)
+        shell: bash
+        env:
+          SYFT_VERSION: "1.50.0"
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -sSfLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_checksums.txt"
+          grep "syft_${SYFT_VERSION}_linux_amd64.tar.gz" "syft_${SYFT_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "syft_${SYFT_VERSION}_linux_amd64.tar.gz" syft
+          sudo install -m 0755 syft /usr/local/bin/syft
+          syft version
+
+      - name: Install Grype (pinned, checksum-verified)
+        shell: bash
+        env:
+          GRYPE_VERSION: "0.116.1"
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -sSfLO "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          curl -sSfLO "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_checksums.txt"
+          grep "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" "grype_${GRYPE_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "grype_${GRYPE_VERSION}_linux_amd64.tar.gz" grype
+          sudo install -m 0755 grype /usr/local/bin/grype
+          grype version
+
+      # `--exclude ./target` keeps build output out of the SBOM. Without it Syft also
+      # catalogs vendored sources and intermediate artifacts under target/, which are not
+      # part of what this crate ships and would inflate the component list.
+      #
+      # Scope note: a dir scan reads Cargo.lock, so the SBOM covers the resolved lockfile —
+      # a superset of what actually gets compiled. Optional dependencies of dependencies
+      # appear even when their feature is off. See AGENTS.md § Security scanning.
+      - name: Generate SBOM (CycloneDX + SPDX)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sbom-output
+          syft scan dir:. --exclude './target' \
+            -o cyclonedx-json=sbom-output/sbom.cdx.json \
+            -o spdx-json=sbom-output/sbom.spdx.json
+          echo "Components: $(jq '.components | length' sbom-output/sbom.cdx.json)"
+
+      - name: Scan SBOM with Grype
+        id: grype-scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          grype "sbom:sbom-output/sbom.cdx.json" -o json > sbom-output/grype-results.json
+
+          sev() { jq --arg s "$1" '[.matches[] | select(.vulnerability.severity == $s)] | length' sbom-output/grype-results.json; }
+          fixable() { jq --arg s "$1" '[.matches[] | select(.vulnerability.severity == $s) | select(.vulnerability.fix.state == "fixed")] | length' sbom-output/grype-results.json; }
+
+          critical=$(sev Critical); high=$(sev High); medium=$(sev Medium); low=$(sev Low)
+          critical_fixable=$(fixable Critical); high_fixable=$(fixable High)
+
+          {
+            echo "finding-count-critical=$critical"
+            echo "finding-count-high=$high"
+            echo "finding-count-medium=$medium"
+            echo "finding-count-low=$low"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## SBOM + CVE scan (mode: ${MODE})"
+            echo ""
+            echo "Components scanned: $(jq '.components | length' sbom-output/sbom.cdx.json)"
+            echo ""
+            echo "| Severity | Count | With fix available |"
+            echo "| --- | --- | --- |"
+            echo "| Critical | $critical | $critical_fixable |"
+            echo "| High | $high | $high_fixable |"
+            echo "| Medium | $medium | n/a (not gated) |"
+            echo "| Low | $low | n/a (not gated) |"
+            if [ "$((critical + high + medium + low))" -gt 0 ]; then
+              echo ""
+              echo "### Findings"
+              echo ""
+              echo '```text'
+              jq -r '.matches[] | "\(.vulnerability.id)  \(.vulnerability.severity)  \(.artifact.name)@\(.artifact.version)  fix=\(.vulnerability.fix.state) \(.vulnerability.fix.versions // [] | join(","))"' sbom-output/grype-results.json
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$medium" -gt 0 ]; then
+            echo "::warning::$medium MEDIUM finding(s) — tracked under the triage SLA, not gated."
+          fi
+
+          # informational mode never fails, regardless of findings.
+          if [ "${MODE}" != "gating" ]; then
+            exit 0
+          fi
+
+          # gating fails only on CRITICAL/HIGH that have a fix — there is nothing
+          # actionable to gate on otherwise.
+          gating_fail_count=$((critical_fixable + high_fixable))
+          if [ "$gating_fail_count" -gt 0 ]; then
+            echo "::error::Gating scan failed: $gating_fail_count CRITICAL/HIGH finding(s) with an available fix."
+            jq -r '.matches[] | select(.vulnerability.severity == "Critical" or .vulnerability.severity == "High") | select(.vulnerability.fix.state == "fixed") | "  - \(.vulnerability.id) (\(.vulnerability.severity)) in \(.artifact.name)@\(.artifact.version) — fix: \(.vulnerability.fix.versions | join(", "))"' sbom-output/grype-results.json
+            exit 1
+          fi
+
+      # Uploaded even when the gate fails, so the SBOM and raw results are always
+      # inspectable for the run that flagged something.
+      - name: Upload SBOM + scan results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ github.run_id }}
+          path: sbom-output/
+          retention-days: 90
+
+      # Workflow artifacts expire after 90 days, which is not long enough to hand an SBOM
+      # to someone months later. Release assets don't expire, so a released version's SBOM
+      # stays retrievable for as long as the release does.
+      - name: Attach SBOMs to release
+        if: always() && inputs.upload-to-release != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.upload-to-release }}
+        run: |
+          set -euo pipefail
+          cp sbom-output/sbom.cdx.json "mikrotik-mcp-${TAG}-sbom.cdx.json"
+          cp sbom-output/sbom.spdx.json "mikrotik-mcp-${TAG}-sbom.spdx.json"
+          gh release upload "$TAG" \
+            "mikrotik-mcp-${TAG}-sbom.cdx.json" \
+            "mikrotik-mcp-${TAG}-sbom.spdx.json" --clobber

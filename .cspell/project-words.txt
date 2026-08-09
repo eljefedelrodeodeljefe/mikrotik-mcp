@@ -1,5 +1,6 @@
-
+# Project-specific words for cspell
 airdress
+auditable
 capsman
 CDP
 Ceee
@@ -7,6 +8,7 @@ changeme
 clippy
 conntrack
 creds
+CycloneDX
 datapath
 datapaths
 dstnat
@@ -15,24 +17,27 @@ editorconfig
 eljefedelrodeodeljefe
 fasttrack
 gitflow
+Grype
 homebase
 hostnames
 hotfixes
 iface
+inspectable
 Lindstaedt
 LLDP
 markdownlint
 mikrotik
-Mikrotik
 MikroTik
 MIKROTIK
+Mikrotik
 MNDP
+pipefail
 pmtu
 postrouting
 pppoe
 prek
 prerouting
-# Project-specific words for cspell
+QUIC
 reorganises
 reqwest
 rmcp
@@ -48,9 +53,12 @@ rustls
 rustup
 schemars
 serde
+SPDX
 srcnat
 stabilisation
 Swatinem
+Syft
 thiserror
 tokio
+unbuilt
 wlan

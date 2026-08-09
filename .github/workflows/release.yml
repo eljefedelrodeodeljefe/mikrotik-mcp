@@ -50,3 +50,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.event.release.tag_name }}" dist/*.tar.gz --clobber
+
+  # SBOM for the released version, attached to the release as a durable asset.
+  # Informational: a finding must never block a release that has already been published —
+  # the weekly gating scan in sbom-scan.yml is where enforcement lives.
+  sbom:
+    name: SBOM + vulnerability scan
+    if: "!github.event.release.prerelease"
+    uses: ./.github/workflows/sbom-scan.yml
+    permissions:
+      contents: write
+    with:
+      mode: informational
+      upload-to-release: ${{ github.event.release.tag_name }}

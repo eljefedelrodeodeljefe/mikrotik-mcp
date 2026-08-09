@@ -218,6 +218,32 @@ Commit prefixes that affect the version:
 
 [rp]: https://github.com/googleapis/release-please
 
+## SBOM & vulnerability scanning
+
+Every release ships a Software Bill of Materials, generated with [Syft][syft] and
+attached to the GitHub release as two assets:
+
+- `mikrotik-mcp-<tag>-sbom.cdx.json` — CycloneDX
+- `mikrotik-mcp-<tag>-sbom.spdx.json` — SPDX
+
+Both formats are published so you can feed the SBOM to whichever tooling you already
+run, rather than betting on one standard. Release assets don't expire, so a given
+version's SBOM stays retrievable for as long as the release does.
+
+The same SBOM is scanned for known vulnerabilities with [Grype][grype] — weekly,
+and on every release. The weekly run fails on Critical/High findings that have a
+fix available; the release-time run reports only, so a finding can't leave a
+release half-published.
+
+Note the SBOM describes the resolved `Cargo.lock`, which is a **superset** of what
+gets compiled: Cargo records optional dependencies of dependencies even when the
+feature that would enable them is off. If you are assessing a finding against this
+crate, check `cargo tree -i <crate>` first — a crate absent from the build graph
+never reaches the binary.
+
+[syft]: https://github.com/anchore/syft
+[grype]: https://github.com/anchore/grype
+
 ## License
 
 MIT
