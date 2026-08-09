@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.3.0...v0.4.0) (2026-08-09)
+
+
+### Features
+
+* add read-only CAPsMAN tools ([6d098fc](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/6d098fc7bd58bb42b67f62fcfce39fcd6124305a))
+* add read-only CAPsMAN tools ([56143a3](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/56143a301a723a9942066882c7632d65ef54a6fe))
+
 ## [0.3.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.2.0...v0.3.0) (2026-06-04)
 
 
