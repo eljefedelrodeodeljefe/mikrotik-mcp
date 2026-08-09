@@ -74,13 +74,18 @@ prek run --all-files
 ```
 
 Hooks: trailing-whitespace, end-of-file, check-toml/yaml, merge-conflict,
-large-files, cspell, editorconfig-checker, markdownlint-cli2, `cargo fmt
+large-files, typos, editorconfig-checker, markdownlint-cli2, `cargo fmt
 --check`, `cargo clippy --all-targets -- -D warnings`.
 
 Clippy is set to deny warnings — fix lints, don't `#[allow]` them away.
-If `cspell` flags a real domain word, add it to `.cspell/project-words.txt`.
+Spell checking is [`typos`][typos] (Rust), which looks for *known misspellings*
+rather than flagging every unrecognised word — so RouterOS menu paths, crate
+names and domain vocabulary need no dictionary entries. On the rare genuine false
+positive, add it to `_typos.toml` under `[default.extend-words]` with a comment
+saying why; don't reach for a blanket exclusion.
 
 [prek]: https://github.com/j178/prek
+[typos]: https://github.com/crate-ci/typos
 
 ## Branch naming
 

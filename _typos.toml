@@ -1,0 +1,15 @@
+# Source-code spell checking (crate-ci/typos).
+#
+# typos looks for *known misspellings* rather than flagging every word it doesn't
+# recognise, so domain vocabulary (RouterOS menu paths, crate names, CAPsMAN terms)
+# needs no dictionary. The single exception below is a genuine false positive.
+
+[default.extend-words]
+# "RouterOS" is MikroTik's product name and `RouterosClient` is the type in
+# src/client.rs — typos would otherwise "correct" it to "Routers" 127 times.
+Routeros = "Routeros"
+
+[files]
+# Generated files: release-please owns CHANGELOG.md, cargo owns Cargo.lock.
+# A typo there is not ours to fix.
+extend-exclude = ["CHANGELOG.md", "Cargo.lock"]
