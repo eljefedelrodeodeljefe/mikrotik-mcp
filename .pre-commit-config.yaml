@@ -10,12 +10,14 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=512"]
 
-  - repo: https://github.com/streetsidesoftware/cspell-cli
-    rev: v8.17.3
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.49.0
     hooks:
-      - id: cspell
-        name: cspell
-        args: ["--no-progress", "--no-summary", "--no-must-find-files"]
+      - id: typos
+        # Drop the hook's default `--write-changes`: a spell checker that silently
+        # rewrites source on commit hides what it changed, and in CI it would "pass"
+        # by mutating the checkout instead of reporting. Report and fail instead.
+        args: ["--force-exclude"]
 
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
     rev: "3.6.1"
