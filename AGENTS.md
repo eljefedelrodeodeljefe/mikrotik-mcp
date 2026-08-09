@@ -137,6 +137,62 @@ convention, add it to `ci.yml` too.
 the release PR. `.github/workflows/release.yml` is separate again: it fires on
 a **published release**, not on pushes, and skips pre-releases.
 
+`.github/workflows/sbom-scan.yml` generates the SBOM and scans it for CVEs —
+weekly on a schedule (gating), and from `release.yml` at release time
+(informational). See **Security scanning** below.
+
+## Security scanning
+
+`sbom-scan.yml` runs Syft (SBOM: CycloneDX + SPDX) then Grype (CVE scan) over
+the crate's dependency tree.
+
+| Trigger | Mode | Effect |
+| --- | --- | --- |
+| Weekly schedule | **gating** | Fails on Critical/High with a fix |
+| Release published | informational | Attaches SBOMs to the release |
+| `workflow_dispatch` | your choice | Fails only if you select `gating` |
+
+A release is never gated: by the time `release.yml` runs the version is already
+published, so failing there would leave a half-shipped release. Critical/High
+findings with **no** fix available are logged, not gated — there is nothing
+actionable to gate on. Medium gets a `::warning::`; Low is logged only.
+
+Two conventions in that workflow differ from the rest of the repo, on purpose:
+
+- **Actions are pinned by commit SHA, not by major tag.** Tags are mutable; a
+  workflow whose job is supply-chain assurance must not depend on a mutable
+  reference. Everything else in `.github/workflows/` pins by tag (`@v7`).
+- **Syft and Grype are installed from checksum-verified release tarballs**, not
+  from a wrapper Action or `curl | sh`. Don't "simplify" either of these.
+
+When bumping the pinned `SYFT_VERSION` / `GRYPE_VERSION`, keep the checksum
+verification step intact.
+
+**The SBOM is lockfile-scoped, so it is a superset of what actually ships.**
+`syft scan dir:.` reads `Cargo.lock`, and Cargo records optional dependencies of
+dependencies even when the feature that would pull them in is disabled. Before
+treating a finding as real exposure, check whether the crate is built at all:
+
+```sh
+cargo tree -i <crate>                 # "nothing to print" => not in the build graph
+cargo tree -i <crate> --target all    # check other platforms too
+```
+
+A crate absent from the build graph is lockfile hygiene, not an exposure — fix it
+if the fix is cheap (`cargo update -p <crate>`, then `cargo test --locked`), but
+don't treat it as an incident. The first finding this scanning produced was
+exactly that case: a High advisory in a QUIC crate reachable only through a
+`reqwest` feature this crate does not enable.
+
+If unbuilt optional dependencies ever get noisy, the fix is to build with
+`cargo auditable` and scan the binary, which embeds the real dependency set.
+Deliberately not done today — it adds a build-time dependency to solve a problem
+this crate does not have.
+
+The scan covers the crate dependency tree and the GitHub Actions pinned in
+`.github/workflows/` (Syft catalogs those too). It does not cover the Rust
+toolchain, the runner image, or the RouterOS devices this server talks to.
+
 ## Tool descriptions
 
 Tool descriptions (the `description = "…"` string in each `#[tool(…)]` attribute)
