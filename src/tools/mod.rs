@@ -1,3 +1,4 @@
+pub mod capsman;
 pub mod dhcp;
 pub mod disk;
 pub mod dns;
