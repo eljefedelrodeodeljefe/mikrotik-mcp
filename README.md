@@ -199,15 +199,14 @@ prek run --all-files    # run all hooks against the whole tree
 ## Releases
 
 Releases are cut by [release-please][rp] using conventional-commit messages.
-Two branches feed it:
+It watches **`main`**: as commits land, it maintains a release PR, and merging
+that PR tags the version, creates a GitHub release, and uploads prebuilt
+binaries (Linux/macOS, x86_64 + arm64).
 
-- **`main`** — stable releases (`v0.2.0`, `v0.2.1`, …). Merging the
-  release PR tags + creates a GitHub release and uploads prebuilt binaries
-  (Linux/macOS, x86_64 + arm64).
-- **`develop`** — pre-releases (`v0.2.0-rc.1`, `v0.2.0-rc.2`, …). Tags are
-  cut and GH releases are marked "pre-release", but **no binaries are
-  uploaded** for prereleases — install from source or use `cargo install
-  --git ... --tag v0.2.0-rc.1` if you need to try one.
+Pre-releases (`v0.2.0-rc.1`, …) used to be cut from a `develop` branch. That
+branch is gone, so no pre-releases are produced today. The release workflow
+still skips pre-release tags if any are ever created again, and no binaries
+are uploaded for them.
 
 Trigger manually with **Actions → Release → Run workflow** (workflow_dispatch).
 

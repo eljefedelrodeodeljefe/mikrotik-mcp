@@ -82,31 +82,25 @@ If `cspell` flags a real domain word, add it to `.cspell/project-words.txt`.
 
 [prek]: https://github.com/j178/prek
 
-## Branch naming (gitflow)
+## Branch naming
 
-This repo follows [gitflow][gitflow]:
+**`main` is the only long-lived branch.** Branch off it, PR back into it.
+There is no `develop` — it was merged into `main` in PR #10 and deleted, and
+every PR since has targeted `main` directly.
 
-- `main` — production / released code. Tagged versions live here. Only
-  release PRs (from release-please) and hotfixes merge directly.
-- `develop` — integration branch. Day-to-day work targets this branch.
-  Releases are cut by merging `develop` → `main`.
-- `feature/<short-name>` — new features. Branch off `develop`, PR back into
-  `develop`. Example: `feature/firewall-rules`.
-- `bugfix/<short-name>` — non-urgent bug fixes. Branch off `develop`, PR into
-  `develop`.
-- `release/<version>` — release stabilisation. Branch off `develop`, PR into
-  `main` (and back-merge into `develop`). Usually managed automatically by
-  release-please.
-- `hotfix/<short-name>` — urgent production fixes. Branch off `main`, PR into
-  `main` *and* `develop`.
+- `main` — the trunk. Released code, tagged versions, and the base for all
+  work. Merges arrive by PR; release PRs come from release-please.
+- `feat/<short-name>` — new features. Example: `feat/firewall-rules`.
+- `fix/<short-name>` or `bugfix/<short-name>` — bug fixes.
+- `docs/<short-name>`, `chore/<short-name>`, `refactor/<short-name>` — as the
+  name suggests.
 
-Use kebab-case slugs (`feature/dhcp-lease-tools`, not
-`feature/DHCP_Lease_Tools`). Keep names short and topic-focused, not
-ticket-numbered (we don't use issue trackers as filenames here).
+`feature/<short-name>` also appears in the history and still works; `feat/` is
+what recent branches use. Pick one and stay consistent within a branch.
 
-CI runs on all five branch prefixes plus pushes to `main` and `develop`.
-
-[gitflow]: https://nvie.com/posts/a-successful-git-branching-model/
+Use kebab-case slugs (`feat/dhcp-lease-tools`, not `feat/DHCP_Lease_Tools`).
+Keep names short and topic-focused, not ticket-numbered (we don't use issue
+trackers as filenames here).
 
 ## Commit messages
 
@@ -131,9 +125,17 @@ markers). Merging that PR cuts the tag and triggers binary builds.
 ## CI
 
 `.github/workflows/ci.yml` runs prek, check, fmt, clippy, test, and doc on
-every push/PR to `main`. All jobs must pass. The release workflow
-(`.github/workflows/release.yml`) runs separately and only acts on `main`
-pushes or manual dispatch.
+every PR into `main`, on pushes to `main`, and on pushes to `feat/**`,
+`feature/**`, `fix/**`, `bugfix/**`, `docs/**`, `chore/**` and `refactor/**`.
+All jobs must pass.
+
+A branch prefix that is not in that list still gets CI from its **pull
+request** — only the push-triggered run is skipped. If you add a new prefix
+convention, add it to `ci.yml` too.
+
+`.github/workflows/release-please.yml` watches pushes to `main` and maintains
+the release PR. `.github/workflows/release.yml` is separate again: it fires on
+a **published release**, not on pushes, and skips pre-releases.
 
 ## Tool descriptions
 

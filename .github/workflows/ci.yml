@@ -2,9 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, "feature/**", "bugfix/**", "release/**", "hotfix/**"]
+    branches:
+      [
+        main,
+        "feat/**",
+        "feature/**",
+        "fix/**",
+        "bugfix/**",
+        "docs/**",
+        "chore/**",
+        "refactor/**",
+      ]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
 
 # Cancel superseded runs on the same ref. PRs use the head_ref so each push to a
