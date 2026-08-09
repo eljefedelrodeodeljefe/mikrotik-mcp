@@ -2,10 +2,13 @@
 airdress
 capsman
 CDP
+Ceee
 changeme
 clippy
 conntrack
 creds
+datapath
+datapaths
 dstnat
 dtolnay
 editorconfig

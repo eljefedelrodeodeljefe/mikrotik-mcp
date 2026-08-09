@@ -577,6 +577,115 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    // ── CAPsMAN ───────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Get the CAPsMAN manager settings from /caps-man/manager — whether the \
+            manager is enabled, its certificate and ca-certificate, require-peer-certificate, \
+            and upgrade-policy. This is legacy CAPsMAN (wireless package), not \
+            /interface/wifi/capsman"
+    )]
+    async fn get_capsman_manager(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::get_capsman_manager(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List CAPs connected to the manager from /caps-man/remote-cap — base-mac, \
+            board, identity, serial, number of radios, version, and state (should be Run for a \
+            CAP that has finished joining)"
+    )]
+    async fn list_capsman_remote_caps(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_remote_caps(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List radios provided by connected CAPs from /caps-man/radio — radio-mac, \
+            the capN interface it backs, remote-cap-identity, and whether the radio is \
+            provisioned"
+    )]
+    async fn list_capsman_radios(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_radios(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List CAPsMAN interfaces from /caps-man/interface — the capN master and \
+            slave interfaces, their configuration, radio-mac, current-channel, current-state, \
+            and registered client counts"
+    )]
+    async fn list_capsman_interfaces(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_interfaces(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List clients associated to CAPsMAN-managed interfaces from \
+            /caps-man/registration-table — mac-address, interface, ssid, rx-signal, tx/rx rates, \
+            bytes, and uptime"
+    )]
+    async fn list_capsman_registrations(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_registrations(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List CAPsMAN configuration profiles from /caps-man/configuration — name, \
+            ssid, country, installation, and the channel, datapath and security profiles each \
+            one references"
+    )]
+    async fn list_capsman_configurations(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_configurations(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List CAPsMAN provisioning rules from /caps-man/provisioning — action, \
+            hw-supported-modes, radio-mac, identity-regexp, and the master-configuration and \
+            slave-configurations applied to a matching radio. Rules are matched in list order"
+    )]
+    async fn list_capsman_provisioning(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_provisioning(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List CAPsMAN channel profiles from /caps-man/channel — name, band, \
+            frequency, extension-channel, and secondary-frequency"
+    )]
+    async fn list_capsman_channels(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_channels(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List CAPsMAN datapath profiles from /caps-man/datapath — name, bridge, \
+            local-forwarding, and vlan settings that decide where client traffic is placed"
+    )]
+    async fn list_capsman_datapaths(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::capsman::list_capsman_datapaths(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     // ── LTE ───────────────────────────────────────────────────────────────────
 
     #[tool(
