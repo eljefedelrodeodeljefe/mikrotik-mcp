@@ -83,6 +83,30 @@ impl RouterosClient {
             .context("failed to parse JSON response")
     }
 
+    /// Updates properties of an existing item (`PATCH /rest/<menu>/<id>`).
+    /// RouterOS maps `PATCH` to "set"; only the supplied properties change.
+    pub async fn patch<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        id: &str,
+        body: &B,
+    ) -> Result<T> {
+        let id = normalise_id(id);
+        let url = format!("{}/{}/{}", self.base_url, path.trim_start_matches('/'), id);
+        self.client
+            .patch(&url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(body)
+            .send()
+            .await
+            .context("request failed")?
+            .error_for_status()
+            .context("RouterOS returned error status")?
+            .json()
+            .await
+            .context("failed to parse JSON response")
+    }
+
     pub async fn post_void<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
         self.client
@@ -163,12 +187,7 @@ impl RouterosClient {
     }
 
     pub async fn delete(&self, path: &str, id: &str) -> Result<()> {
-        // RouterOS item IDs are like "*1"; accept with or without the leading *.
-        let id = if id.starts_with('*') {
-            id.to_string()
-        } else {
-            format!("*{}", id)
-        };
+        let id = normalise_id(id);
         let url = format!("{}/{}/{}", self.base_url, path.trim_start_matches('/'), id);
         self.client
             .delete(&url)
@@ -179,5 +198,14 @@ impl RouterosClient {
             .error_for_status()
             .context("RouterOS returned error status")?;
         Ok(())
+    }
+}
+
+/// RouterOS item IDs look like `*1`; accept them with or without the leading `*`.
+fn normalise_id(id: &str) -> String {
+    if id.starts_with('*') {
+        id.to_string()
+    } else {
+        format!("*{id}")
     }
 }
