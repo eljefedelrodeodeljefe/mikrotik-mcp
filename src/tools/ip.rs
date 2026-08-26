@@ -15,6 +15,14 @@ pub async fn add_address(client: &RouterosClient, p: &AddIpAddressParams) -> any
     client.put("ip/address", &body).await
 }
 
+/// Lists IP pools (`/ip/pool`) — the address ranges DHCP servers hand out.
+///
+/// Needed to tell whether a given address falls inside a dynamic range before
+/// pinning it with a static lease.
+pub async fn list_pools(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("ip/pool").await
+}
+
 pub async fn remove_address(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
     client.delete("ip/address", id).await
 }
@@ -61,5 +69,21 @@ mod tests {
         };
         let result = add_address(&client, &p).await.unwrap();
         assert_eq!(result["address"], "192.168.188.2/24");
+    }
+
+    #[tokio::test]
+    async fn list_pools_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/ip/pool"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {".id": "*1", "name": "default-dhcp", "ranges": "192.0.2.10-192.0.2.254"}
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_pools(&client).await.unwrap();
+        assert_eq!(result.as_array().unwrap()[0]["name"], "default-dhcp");
     }
 }

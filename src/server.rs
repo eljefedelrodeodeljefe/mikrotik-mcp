@@ -278,6 +278,16 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "List IP pools (/ip/pool) — the address ranges DHCP servers hand out. Use this to check whether an address falls inside a dynamic range before pinning it with a static lease"
+    )]
+    async fn list_ip_pools(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::ip::list_pools(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     #[tool(description = "Remove an IP address by its .id (from list_ip_addresses)")]
     async fn remove_ip_address(
         &self,
@@ -464,6 +474,36 @@ impl MikrotikServer {
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
         let data = tools::dhcp::add_static_lease(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Convert an existing dynamic DHCP lease into a static one (/ip/dhcp-server/lease/make-static). Preferred over add_dhcp_static_lease when the client already holds a dynamic lease — it pins the binding in place instead of creating a second lease for the same MAC"
+    )]
+    async fn make_dhcp_lease_static(
+        &self,
+        Parameters(p): Parameters<DhcpLeaseIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.id, "id")?;
+        let data = tools::dhcp::make_lease_static(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Update properties of an existing DHCP lease by .id (/ip/dhcp-server/lease/set) — address, mac_address, comment, server. Only the properties you supply are changed"
+    )]
+    async fn set_dhcp_lease(
+        &self,
+        Parameters(p): Parameters<SetDhcpLeaseParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.id, "id")?;
+        let data = tools::dhcp::set_lease(&self.client, &p)
             .await
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
