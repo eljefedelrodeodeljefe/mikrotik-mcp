@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.4.0...v0.5.0) (2026-08-26)
+
+
+### Features
+
+* add list_ip_pools, make_dhcp_lease_static and set_dhcp_lease ([14fc355](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/14fc355a6971499e68e5cfe0f98029e1c10ce73b))
+* add list_ip_pools, make_dhcp_lease_static and set_dhcp_lease ([dc441db](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/dc441dbad81d6b1ceda25ef4c3936b31727c25f5))
+* add SBOM generation and vulnerability scanning ([fd80fb0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/fd80fb03be028833fee7fce1a62eb89f0971a80c))
+* add SBOM generation and vulnerability scanning ([2e90994](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/2e909947ce7894f97726de855396d792e79ba591))
+
+
+### Documentation
+
+* document trunk-based branching; drop dead develop references ([0cfed5b](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/0cfed5b8e11139f1684ac5138dab9cd544680813))
+* document trunk-based branching; drop dead develop references ([1475ef6](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/1475ef687a9830cae2728c7d9223ec586e81742f))
+
 ## [0.4.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.3.0...v0.4.0) (2026-08-09)
 
 
