@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.5.0...v0.6.0) (2026-10-05)
+
+
+### Features
+
+* **backup:** add router-initiated SFTP export for save_backup ([2223e49](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/2223e4960a10460708c66f8b381c376834d29b6a))
+* **backup:** router-initiated SFTP export for save_backup ([303a38c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/303a38c0d222a307d20a78437cd44a21bc2b2eba))
+
 ## [0.5.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.4.0...v0.5.0) (2026-08-26)
 
 
