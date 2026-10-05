@@ -2,6 +2,20 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Serialize, de::DeserializeOwned};
 
+/// Where the router should push an encrypted backup, via RouterOS
+/// `/tool fetch upload=yes mode=sftp`. The router initiates the connection
+/// (egress only), so this works even when inbound FTP is disabled by a
+/// hardened management config.
+#[derive(Clone, Debug)]
+pub struct SftpTarget {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    /// Remote directory (or empty for the login home dir).
+    pub path: String,
+}
+
 pub struct RouterosClient {
     base_url: String,
     host: String,
@@ -119,6 +133,35 @@ impl RouterosClient {
             .error_for_status()
             .context("RouterOS returned error status")?;
         Ok(())
+    }
+
+    /// Pushes a file already saved on the router out to `target` via
+    /// `/tool fetch upload=yes mode=sftp`. Returns the fetch status object.
+    /// Unlike [`ftp_download`](Self::ftp_download), nothing is pulled to the
+    /// local machine — the file lands on the SFTP host — and the router makes
+    /// only an outbound connection, so no inbound service (FTP) is required.
+    pub async fn sftp_push(
+        &self,
+        src_filename: &str,
+        remote_name: &str,
+        target: &SftpTarget,
+    ) -> Result<serde_json::Value> {
+        let dst_path = if target.path.trim().is_empty() {
+            remote_name.to_string()
+        } else {
+            format!("{}/{}", target.path.trim_end_matches('/'), remote_name)
+        };
+        let body = serde_json::json!({
+            "upload": "yes",
+            "mode": "sftp",
+            "address": target.host,
+            "port": target.port.to_string(),
+            "user": target.user,
+            "password": target.password,
+            "src-path": src_filename,
+            "dst-path": dst_path,
+        });
+        self.post("tool/fetch", &body).await
     }
 
     pub async fn ftp_download(&self, filename: &str) -> Result<Vec<u8>> {

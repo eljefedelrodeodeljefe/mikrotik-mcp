@@ -7,7 +7,7 @@ use rmcp::{
 };
 use serde_json::Value;
 
-use crate::client::RouterosClient;
+use crate::client::{RouterosClient, SftpTarget};
 use crate::error::tool_error;
 use crate::params::*;
 use crate::tools;
@@ -17,6 +17,7 @@ pub struct MikrotikServer {
     password: String,
     backup_encrypt: bool,
     writes_enabled: bool,
+    backup_export: Option<SftpTarget>,
 }
 
 impl MikrotikServer {
@@ -38,11 +39,32 @@ impl MikrotikServer {
             .map(|v| matches!(v.as_str(), "true" | "1" | "yes"))
             .unwrap_or(false);
 
+        // Optional headless backup export: when a destination host is set, the
+        // router pushes each backup out over SFTP (egress only), which works
+        // even on a hardened device with inbound FTP disabled.
+        let backup_export = match std::env::var("MIKROTIK_BACKUP_SFTP_HOST") {
+            Ok(h) if !h.trim().is_empty() => Some(SftpTarget {
+                host: h,
+                port: std::env::var("MIKROTIK_BACKUP_SFTP_PORT")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(22),
+                user: std::env::var("MIKROTIK_BACKUP_SFTP_USER")
+                    .context("MIKROTIK_BACKUP_SFTP_USER not set (required with MIKROTIK_BACKUP_SFTP_HOST)")?,
+                password: std::env::var("MIKROTIK_BACKUP_SFTP_PASSWORD").context(
+                    "MIKROTIK_BACKUP_SFTP_PASSWORD not set (required with MIKROTIK_BACKUP_SFTP_HOST)",
+                )?,
+                path: std::env::var("MIKROTIK_BACKUP_SFTP_PATH").unwrap_or_default(),
+            }),
+            _ => None,
+        };
+
         Ok(Self {
             client: RouterosClient::new(&host, port, &username, &password, tls_verify)?,
             password,
             backup_encrypt,
             writes_enabled,
+            backup_export,
         })
     }
 
@@ -128,16 +150,22 @@ impl MikrotikServer {
     }
 
     #[tool(
-        description = "Save an encrypted binary .backup to the device, download it, and write it to a local path. Encrypted with MIKROTIK_PASSWORD by default."
+        description = "Save an encrypted binary .backup on the device, then export it: when MIKROTIK_BACKUP_SFTP_HOST is set the router pushes it out over SFTP (works with inbound FTP disabled); otherwise it is downloaded over FTP to output_path. Encrypted with MIKROTIK_PASSWORD by default."
     )]
     async fn save_backup(
         &self,
         Parameters(p): Parameters<SaveBackupParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        let msg = tools::system::save_backup(&self.client, &p, &self.password, self.backup_encrypt)
-            .await
-            .map_err(tool_error)?;
+        let msg = tools::system::save_backup(
+            &self.client,
+            &p,
+            &self.password,
+            self.backup_encrypt,
+            self.backup_export.as_ref(),
+        )
+        .await
+        .map_err(tool_error)?;
         Ok(Self::ok_msg(&msg))
     }
 
