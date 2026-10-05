@@ -1,7 +1,7 @@
 use anyhow::Context;
 use serde_json::{Value, json};
 
-use crate::client::RouterosClient;
+use crate::client::{RouterosClient, SftpTarget};
 use crate::params::{
     GetLogsParams, RestoreBackupParams, SaveBackupParams, SetSystemIdentityParams,
 };
@@ -41,6 +41,7 @@ pub async fn save_backup(
     p: &SaveBackupParams,
     password: &str,
     encrypt: bool,
+    export: Option<&SftpTarget>,
 ) -> anyhow::Result<String> {
     let mut body = serde_json::json!({"name": p.name});
     if encrypt {
@@ -56,24 +57,47 @@ pub async fn save_backup(
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let filename = format!("{}.backup", p.name);
+    let encryption = if encrypt { "encrypted" } else { "unencrypted" };
+
+    // Preferred, hardening-compatible path: the router pushes the backup out
+    // over SFTP (egress only). Works even when inbound FTP is disabled.
+    if let Some(target) = export {
+        client
+            .sftp_push(&filename, &filename, target)
+            .await
+            .context("step 2: SFTP push failed")?;
+        return Ok(format!(
+            "backup {filename} saved on device and pushed via SFTP to {}:{}{} ({encryption})",
+            target.host,
+            target.port,
+            if target.path.trim().is_empty() {
+                String::new()
+            } else {
+                format!("/{}", target.path.trim_matches('/'))
+            },
+        ));
+    }
+
+    // Legacy path: pull the file to the local machine over FTP. Requires FTP to
+    // be enabled on the device and an output_path to write to.
+    let output_path = p.output_path.as_deref().context(
+        "output_path is required when no SFTP export destination (MIKROTIK_BACKUP_SFTP_HOST) is configured",
+    )?;
     let bytes = client
         .ftp_download(&filename)
         .await
-        .context("step 2: FTP download failed")?;
+        .context("step 2: FTP download failed (FTP may be disabled on the device — set MIKROTIK_BACKUP_SFTP_HOST to push via SFTP instead)")?;
 
-    let path = std::path::Path::new(&p.output_path);
+    let path = std::path::Path::new(output_path);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .with_context(|| format!("step 3: create_dir_all: {}", p.output_path))?;
+            .with_context(|| format!("step 3: create_dir_all: {output_path}"))?;
     }
-    std::fs::write(path, &bytes)
-        .with_context(|| format!("step 3: write file: {}", p.output_path))?;
+    std::fs::write(path, &bytes).with_context(|| format!("step 3: write file: {output_path}"))?;
 
     Ok(format!(
-        "backup saved to {} ({} bytes, {})",
-        p.output_path,
+        "backup saved to {output_path} ({} bytes, {encryption})",
         bytes.len(),
-        if encrypt { "encrypted" } else { "unencrypted" },
     ))
 }
 
@@ -119,6 +143,72 @@ mod tests {
     use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn save_params(output_path: Option<&str>) -> SaveBackupParams {
+        SaveBackupParams {
+            name: "chateau-test".into(),
+            output_path: output_path.map(Into::into),
+            password: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn save_backup_pushes_via_sftp_when_export_configured() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/backup/save"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/rest/tool/fetch"))
+            .and(wiremock::matchers::body_partial_json(
+                json!({"upload": "yes", "mode": "sftp", "address": "backup-host"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status": "finished"})))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let target = SftpTarget {
+            host: "backup-host".into(),
+            port: 22,
+            user: "svc".into(),
+            password: "pw".into(),
+            path: "mikrotik".into(),
+        };
+        // output_path is irrelevant in SFTP mode.
+        let msg = save_backup(
+            &client,
+            &save_params(None),
+            "fallback-pw",
+            true,
+            Some(&target),
+        )
+        .await
+        .unwrap();
+        assert!(msg.contains("SFTP"), "got: {msg}");
+        assert!(msg.contains("backup-host"), "got: {msg}");
+    }
+
+    #[tokio::test]
+    async fn save_backup_errors_without_output_path_or_export() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/backup/save"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let err = save_backup(&client, &save_params(None), "pw", true, None)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("output_path is required"),
+            "got: {err}"
+        );
+    }
 
     #[tokio::test]
     async fn get_resources_calls_correct_path() {

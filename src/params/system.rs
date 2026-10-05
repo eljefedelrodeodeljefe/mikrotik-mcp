@@ -11,8 +11,10 @@ pub struct SetSystemIdentityParams {
 pub struct SaveBackupParams {
     #[schemars(description = "Backup name without extension (e.g. 'r-ap-1-2026-05-16')")]
     pub name: String,
-    #[schemars(description = "Absolute path on the local machine to write the .backup file")]
-    pub output_path: String,
+    #[schemars(
+        description = "Absolute path on the local machine to write the .backup file. Required for the legacy FTP download; ignored when an SFTP export destination (MIKROTIK_BACKUP_SFTP_HOST) is configured, in which case the router pushes the file to that host instead."
+    )]
+    pub output_path: Option<String>,
     #[schemars(description = "Encryption password — defaults to MIKROTIK_PASSWORD when omitted")]
     pub password: Option<String>,
 }

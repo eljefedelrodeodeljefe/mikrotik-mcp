@@ -72,9 +72,32 @@ If both are set, the API token takes precedence.
 | `MIKROTIK_TLS_VERIFY` | `false` | Verify TLS certificate (`true`/`false`) |
 | `MIKROTIK_BACKUP_ENCRYPT` | `true` | Encrypt backups with `MIKROTIK_PASSWORD` |
 | `MIKROTIK_ALLOW_WRITES` | `false` | Enable mutating tools |
+| `MIKROTIK_BACKUP_SFTP_HOST` | — | Push backups here via SFTP (see [Backups](#backups)); enables SFTP export when set |
+| `MIKROTIK_BACKUP_SFTP_PORT` | `22` | SFTP destination port |
+| `MIKROTIK_BACKUP_SFTP_USER` | — | SFTP user (required with `…_HOST`) |
+| `MIKROTIK_BACKUP_SFTP_PASSWORD` | — | SFTP password (required with `…_HOST`) |
+| `MIKROTIK_BACKUP_SFTP_PATH` | — | Remote directory (default: login home dir) |
 
 The client picks HTTP for port 80 and HTTPS otherwise. If the device only
 has `www` (plain HTTP) enabled rather than `www-ssl`, set `MIKROTIK_PORT=80`.
+
+## Backups
+
+`save_backup` writes an encrypted `.backup` on the device and then exports it
+one of two ways:
+
+- **SFTP push (recommended).** When `MIKROTIK_BACKUP_SFTP_HOST` is set, the
+  router pushes the file to that host via `/tool fetch upload=yes mode=sftp`.
+  The router only makes an **outbound** connection, so this works on a hardened
+  device with inbound FTP disabled, and it is the right fit for a scheduled,
+  no-operator backup. The file lands on the SFTP host; the `output_path`
+  parameter is ignored.
+- **FTP download (legacy).** With no SFTP host configured, the tool pulls the
+  file to the local machine over FTP (port 21) and writes it to `output_path`.
+  This requires the FTP service to be **enabled** on the device and sends the
+  credentials in cleartext — avoid it on hardened/management-locked routers.
+
+`restore_backup` still uploads over FTP; SFTP-based restore is a follow-up.
 
 `MIKROTIK_ALLOW_WRITES` is a convenience guard — it is not a security
 boundary. For genuine read-only enforcement, use a RouterOS user with
