@@ -754,6 +754,116 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "Set a CAPsMAN channel profile in /caps-man/channel — frequency and/or \
+            extension-channel. CAPs using the profile are re-provisioned and their clients \
+            reconnect"
+    )]
+    async fn set_capsman_channel(
+        &self,
+        Parameters(p): Parameters<SetCapsmanChannelParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.id, "id")?;
+        let data = tools::wifi::set_capsman_channel(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    // ── WiFi (/interface/wifi) ────────────────────────────────────────────────
+
+    #[tool(
+        description = "List WiFi interfaces from /interface/wifi — name, configuration, channel, \
+            radio-mac, master-interface, and running/inactive state. Includes the dynamic \
+            CAPsMAN-managed wcapN interfaces on a WiFi CAPsMAN manager"
+    )]
+    async fn list_wifi_interfaces(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_interfaces(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Monitor a WiFi interface once (/interface/wifi monitor once) — state \
+            (e.g. running, cac for a DFS channel availability check, managed-by-capsman), \
+            channel, registered-peers, authorized-peers, and tx-power"
+    )]
+    async fn monitor_wifi_interface(
+        &self,
+        Parameters(p): Parameters<WifiMonitorParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::wifi::monitor_wifi_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List WiFi clients from /interface/wifi/registration-table — interface, \
+            mac-address, ssid, signal, tx-rate, rx-rate, bytes, and uptime. On a WiFi CAPsMAN \
+            manager this covers clients of every managed CAP"
+    )]
+    async fn list_wifi_registrations(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_registrations(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List WiFi radios from /interface/wifi/radio — radio-mac, interface, cap, \
+            supported bands, and current-channels"
+    )]
+    async fn list_wifi_radios(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_radios(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List WiFi channel profiles from /interface/wifi/channel — name, band, \
+            frequency, and width"
+    )]
+    async fn list_wifi_channels(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_channels(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "List CAPs connected to the WiFi CAPsMAN from \
+            /interface/wifi/capsman/remote-cap — identity, address, base-mac, board-name, \
+            serial, version, connected-time, and state. This is the WiFi manager, not legacy \
+            /caps-man")]
+    async fn list_wifi_capsman_remote_caps(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_capsman_remote_caps(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Provision a WiFi radio again (/interface/wifi/radio provision) — \
+            re-applies the CAPsMAN provisioning rules to that radio, restarting it. Use this \
+            to restart a dynamic wcapN interface, which /interface/wifi disable refuses. A \
+            DFS channel runs its channel availability check again before going on air"
+    )]
+    async fn provision_wifi_radio(
+        &self,
+        Parameters(p): Parameters<ProvisionWifiRadioParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.id, "id")?;
+        let data = tools::wifi::provision_wifi_radio(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     // ── LTE ───────────────────────────────────────────────────────────────────
 
     #[tool(

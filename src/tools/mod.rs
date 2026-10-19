@@ -9,3 +9,4 @@ pub mod lte;
 pub mod network;
 pub mod smb;
 pub mod system;
+pub mod wifi;
