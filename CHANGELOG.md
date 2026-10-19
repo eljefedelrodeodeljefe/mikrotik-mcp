@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.5.0...v0.6.0) (2026-10-19)
+
+
+### Features
+
+* **backup:** add router-initiated SFTP export for save_backup ([2223e49](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/2223e4960a10460708c66f8b381c376834d29b6a))
+* **backup:** router-initiated SFTP export for save_backup ([303a38c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/303a38c0d222a307d20a78437cd44a21bc2b2eba))
+* WiFi (/interface/wifi) and WiFi CAPsMAN tools, set_capsman_channel ([721090e](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/721090e4c5f9bf1d6ee5fbeaf34ae26edc9d2e0c))
+* WiFi (/interface/wifi) and WiFi CAPsMAN tools, set_capsman_channel ([0705e3b](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/0705e3b08fd4651d57692d1a0e900139cb862ac0))
+
 ## [0.5.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.4.0...v0.5.0) (2026-08-26)
 
 
