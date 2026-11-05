@@ -27,6 +27,10 @@ pub async fn list_neighbors(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/neighbor").await
 }
 
+pub async fn list_arp(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("ip/arp").await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +92,28 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let result = list_neighbors(&client).await.unwrap();
         assert!(result.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_arp_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/ip/arp"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    ".id": "*1",
+                    "address": "192.168.88.21",
+                    "mac-address": "00:19:AF:00:00:01",
+                    "interface": "bridge",
+                    "dynamic": "true",
+                    "complete": "true"
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_arp(&client).await.unwrap();
+        assert_eq!(result[0]["address"], "192.168.88.21");
     }
 }
