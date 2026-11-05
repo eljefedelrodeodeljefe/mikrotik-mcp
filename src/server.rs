@@ -645,6 +645,18 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "List the ARP table from /ip/arp — IP address, MAC address, interface, and \
+            whether each entry is dynamic, complete, or static. Finds hosts with static IPs that \
+            have no DHCP lease"
+    )]
+    async fn list_arp(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::network::list_arp(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     // ── CAPsMAN ───────────────────────────────────────────────────────────────
 
     #[tool(
