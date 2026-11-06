@@ -78,6 +78,10 @@ If both are set, the API token takes precedence.
 | `MIKROTIK_BACKUP_SFTP_PASSWORD` | — | SFTP password (required with `…_HOST`) |
 | `MIKROTIK_BACKUP_SFTP_PATH` | — | Remote directory (default: login home dir) |
 
+Boolean variables take `true`/`false`, `1`/`0` or `yes`/`no`, in any case.
+Any other value, or a port that is not a number, stops the server at startup
+with an error naming the variable.
+
 The client picks HTTP for port 80 and HTTPS otherwise. If the device has
 only `www` (plain HTTP) enabled and no `www-ssl`, set `MIKROTIK_PORT=80`.
 

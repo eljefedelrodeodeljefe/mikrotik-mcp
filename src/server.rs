@@ -1,4 +1,3 @@
-use anyhow::Context;
 use rmcp::{
     ServerHandler,
     handler::server::wrapper::Parameters,
@@ -8,6 +7,7 @@ use rmcp::{
 use serde_json::Value;
 
 use crate::client::{RouterosClient, SftpTarget};
+use crate::config::Config;
 use crate::error::tool_error;
 use crate::params::*;
 use crate::tools;
@@ -22,49 +22,16 @@ pub struct MikrotikServer {
 
 impl MikrotikServer {
     pub fn from_env() -> anyhow::Result<Self> {
-        let host = std::env::var("MIKROTIK_HOST").context("MIKROTIK_HOST not set")?;
-        let port: u16 = std::env::var("MIKROTIK_PORT")
-            .unwrap_or_else(|_| "443".into())
-            .parse()
-            .context("MIKROTIK_PORT must be a valid port number")?;
-        let username = std::env::var("MIKROTIK_USER").unwrap_or_else(|_| "admin".into());
-        let password = std::env::var("MIKROTIK_PASSWORD").context("MIKROTIK_PASSWORD not set")?;
-        let tls_verify = std::env::var("MIKROTIK_TLS_VERIFY")
-            .map(|v| !matches!(v.as_str(), "false" | "0" | "no"))
-            .unwrap_or(false);
-        let backup_encrypt = std::env::var("MIKROTIK_BACKUP_ENCRYPT")
-            .map(|v| !matches!(v.as_str(), "false" | "0" | "no"))
-            .unwrap_or(true);
-        let writes_enabled = std::env::var("MIKROTIK_ALLOW_WRITES")
-            .map(|v| matches!(v.as_str(), "true" | "1" | "yes"))
-            .unwrap_or(false);
+        Self::from_config(Config::from_env()?)
+    }
 
-        // Optional headless backup export: when a destination host is set, the
-        // router pushes each backup out over SFTP (egress only), which works
-        // even on a hardened device with inbound FTP disabled.
-        let backup_export = match std::env::var("MIKROTIK_BACKUP_SFTP_HOST") {
-            Ok(h) if !h.trim().is_empty() => Some(SftpTarget {
-                host: h,
-                port: std::env::var("MIKROTIK_BACKUP_SFTP_PORT")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(22),
-                user: std::env::var("MIKROTIK_BACKUP_SFTP_USER")
-                    .context("MIKROTIK_BACKUP_SFTP_USER not set (required with MIKROTIK_BACKUP_SFTP_HOST)")?,
-                password: std::env::var("MIKROTIK_BACKUP_SFTP_PASSWORD").context(
-                    "MIKROTIK_BACKUP_SFTP_PASSWORD not set (required with MIKROTIK_BACKUP_SFTP_HOST)",
-                )?,
-                path: std::env::var("MIKROTIK_BACKUP_SFTP_PATH").unwrap_or_default(),
-            }),
-            _ => None,
-        };
-
+    pub fn from_config(c: Config) -> anyhow::Result<Self> {
         Ok(Self {
-            client: RouterosClient::new(&host, port, &username, &password, tls_verify)?,
-            password,
-            backup_encrypt,
-            writes_enabled,
-            backup_export,
+            client: RouterosClient::new(&c.host, c.port, &c.username, &c.password, c.tls_verify)?,
+            password: c.password,
+            backup_encrypt: c.backup_encrypt,
+            writes_enabled: c.writes_enabled,
+            backup_export: c.backup_export,
         })
     }
 

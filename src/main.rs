@@ -3,6 +3,7 @@ use rmcp::{ServiceExt, transport::stdio};
 use tracing_subscriber::EnvFilter;
 
 mod client;
+mod config;
 mod error;
 mod params;
 mod server;
