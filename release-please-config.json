@@ -7,6 +7,7 @@
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "prerelease-type": "rc",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "generic",
