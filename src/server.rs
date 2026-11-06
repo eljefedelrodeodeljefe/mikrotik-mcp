@@ -1,10 +1,15 @@
 use rmcp::{
-    ServerHandler,
-    handler::server::wrapper::Parameters,
-    model::{CallToolResult, Content, ErrorCode, ErrorData, ServerCapabilities, ServerInfo},
+    RoleServer, ServerHandler,
+    handler::server::{tool::ToolCallContext, wrapper::Parameters},
+    model::{
+        CallToolRequestParams, CallToolResult, Content, ErrorCode, ErrorData, ServerCapabilities,
+        ServerInfo,
+    },
+    service::RequestContext,
     tool, tool_handler, tool_router,
 };
 use serde_json::Value;
+use tracing::Instrument;
 
 use crate::client::{RouterosClient, SftpTarget};
 use crate::config::Config;
@@ -995,6 +1000,18 @@ impl MikrotikServer {
 
 #[tool_handler]
 impl ServerHandler for MikrotikServer {
+    /// Runs each tool inside a `tool` span, so the client's write log line
+    /// names the tool that made the request.
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let span = tracing::info_span!("tool", name = %request.name);
+        let tcc = ToolCallContext::new(self, request, context);
+        Self::tool_router().call(tcc).instrument(span).await
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "MikroTik RouterOS management via REST API (RouterOS 7.1+). \
@@ -1122,6 +1139,90 @@ mod tests {
             "requests reached the router: {reached:?}"
         );
         client.cancel().await.unwrap();
+    }
+
+    /// Collects formatted log output in memory.
+    #[derive(Clone, Default)]
+    struct Capture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Capture {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Capture {
+        fn text(&self) -> String {
+            String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+        }
+    }
+
+    /// The test binary's log output. A global subscriber, set once: a scoped
+    /// one (`set_default`) races with tests on other threads that register
+    /// the same callsites and can miss events. Lines from every test land
+    /// here, so assertions look for values only their own test uses.
+    fn captured_logs() -> &'static Capture {
+        static LOGS: std::sync::OnceLock<Capture> = std::sync::OnceLock::new();
+        LOGS.get_or_init(|| {
+            let logs = Capture::default();
+            let sink = logs.clone();
+            tracing_subscriber::fmt()
+                .with_ansi(false)
+                .with_max_level(tracing::Level::INFO)
+                .with_writer(move || sink.clone())
+                .init();
+            logs
+        })
+    }
+
+    #[tokio::test]
+    async fn each_write_logs_tool_menu_path_and_id_but_no_secret() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, ResponseTemplate};
+
+        let logs = captured_logs();
+        let router = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&router)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({".id": "*9"})))
+            .mount(&router)
+            .await;
+        let client = connect(server(true, &router)).await;
+        let args = |v: Value| v.as_object().unwrap().clone();
+        call(&client, "remove_dns_static", args(json!({"id": "*C0FFEE"})))
+            .await
+            .unwrap();
+        call(
+            &client,
+            "add_smb_user",
+            args(json!({"name": "log-test-user", "password": "s3cret-pw"})),
+        )
+        .await
+        .unwrap();
+        client.cancel().await.unwrap();
+
+        let text = logs.text();
+        let line = text
+            .lines()
+            .find(|l| l.contains("RouterOS write") && l.contains("*C0FFEE"))
+            .unwrap_or_else(|| panic!("no write line for the delete:\n{text}"));
+        for want in ["INFO", "remove_dns_static", "DELETE", "ip/dns/static"] {
+            assert!(line.contains(want), "{want:?} missing: {line}");
+        }
+        assert!(
+            text.lines().any(|l| l.contains("RouterOS write")
+                && l.contains("add_smb_user")
+                && l.contains("ip/smb/users")),
+            "no write line for add_smb_user:\n{text}"
+        );
+        assert!(!text.contains("s3cret-pw"), "password logged:\n{text}");
     }
 
     #[tokio::test]

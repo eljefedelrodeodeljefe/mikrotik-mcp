@@ -24,7 +24,7 @@ pub async fn monitor_wifi_interface(
     p: &WifiMonitorParams,
 ) -> anyhow::Result<Value> {
     client
-        .post(
+        .post_read(
             "interface/wifi/monitor",
             &json!({"numbers": p.interface, "once": ""}),
         )

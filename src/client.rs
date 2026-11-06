@@ -145,7 +145,25 @@ impl RouterosClient {
             .context("failed to parse JSON response")
     }
 
+    /// Runs a command that only reads (`monitor once`, `print`), so it is
+    /// not logged as a write. Every other `POST` goes through
+    /// [`post`](Self::post).
+    pub async fn post_read<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
+        self.send(self.client.post(&url).json(body))
+            .await?
+            .json()
+            .await
+            .context("failed to parse JSON response")
+    }
+
+    /// Runs a command (`POST /rest/<menu>/<command>`) that changes state.
     pub async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T> {
+        log_write("POST", path, body_id(body).as_deref());
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
         self.send(self.client.post(&url).json(body))
             .await?
@@ -158,6 +176,7 @@ impl RouterosClient {
     /// `PUT` to "add"; a bare `POST /rest/<menu>` is a print query and is
     /// rejected for create payloads.
     pub async fn put<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T> {
+        log_write("PUT", path, None);
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
         self.send(self.client.put(&url).json(body))
             .await?
@@ -174,6 +193,7 @@ impl RouterosClient {
         id: &RouterOsId,
         body: &B,
     ) -> Result<T> {
+        log_write("PATCH", path, Some(id.as_str()));
         let url = format!(
             "{}/{}/{}",
             self.base_url,
@@ -188,6 +208,7 @@ impl RouterosClient {
     }
 
     pub async fn post_void<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
+        log_write("POST", path, body_id(body).as_deref());
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
         self.send(self.client.post(&url).json(body)).await?;
         Ok(())
@@ -298,6 +319,7 @@ impl RouterosClient {
     }
 
     pub async fn delete(&self, path: &str, id: &RouterOsId) -> Result<()> {
+        log_write("DELETE", path, Some(id.as_str()));
         let url = format!(
             "{}/{}/{}",
             self.base_url,
@@ -307,6 +329,28 @@ impl RouterosClient {
         self.send(self.client.delete(&url)).await?;
         Ok(())
     }
+}
+
+/// Logs one line per request that changes router state. Runs inside the
+/// `tool` span opened by the MCP handler, so the line names the tool too.
+/// Only the method, menu path and item id are logged, never the body, which
+/// can hold passwords.
+fn log_write(method: &str, path: &str, id: Option<&str>) {
+    tracing::info!(
+        method,
+        path = path.trim_start_matches('/'),
+        id = id.unwrap_or("-"),
+        "RouterOS write"
+    );
+}
+
+/// The item a command body addresses: its `.id`, or `numbers` (an id or a
+/// name, as in `/interface enable numbers=ether1`).
+fn body_id<B: Serialize>(body: &B) -> Option<String> {
+    let value = serde_json::to_value(body).ok()?;
+    [".id", "numbers"]
+        .iter()
+        .find_map(|k| value.get(*k).and_then(|v| v.as_str()).map(str::to_string))
 }
 
 /// Runs `cmd`, feeding `config` to its stdin, and collects its output.
