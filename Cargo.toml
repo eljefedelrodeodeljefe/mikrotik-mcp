@@ -2,6 +2,7 @@
 name = "mikrotik-mcp"
 version = "0.6.0"
 edition = "2024"
+rust-version = "1.88"
 description = "MikroTik RouterOS MCP server (REST API)"
 license = "MIT"
 repository = "https://github.com/eljefedelrodeodeljefe/mikrotik-mcp"
