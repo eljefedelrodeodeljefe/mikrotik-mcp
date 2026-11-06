@@ -34,7 +34,7 @@ pub struct RestoreBackupParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetLogsParams {
-    #[schemars(description = "Maximum number of log entries to return (default: 50)")]
+    #[schemars(description = "Number of most recent log entries to return (default: 50)")]
     pub count: Option<u32>,
     #[schemars(
         description = "Filter entries whose topics field contains this string (e.g. 'dhcp', 'firewall')"
