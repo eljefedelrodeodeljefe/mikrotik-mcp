@@ -3,19 +3,53 @@
 //! Parsing goes through a lookup function rather than `std::env` directly so
 //! tests can feed values without touching the process environment.
 
+use std::path::PathBuf;
+
 use anyhow::{Context, Result, bail};
 
 use crate::client::SftpTarget;
 
+/// How the REST API is reached. `Http` sends the Basic auth header in
+/// cleartext and must be chosen explicitly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scheme {
+    Http,
+    Https,
+}
+
+impl Scheme {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Http => "http",
+            Self::Https => "https",
+        }
+    }
+}
+
+/// Certificate checking for `https`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Tls {
+    /// Verify the router's certificate: against `ca_file` alone when set (a
+    /// PEM CA, or the router's own certificate), otherwise against the
+    /// built-in public roots.
+    Verify { ca_file: Option<PathBuf> },
+    /// Accept any certificate. Explicit opt-in only.
+    Insecure,
+}
+
 pub struct Config {
     pub host: String,
+    pub scheme: Scheme,
     pub port: u16,
     pub username: String,
     pub password: String,
-    pub tls_verify: bool,
+    pub tls: Tls,
     pub backup_encrypt: bool,
     pub writes_enabled: bool,
     pub backup_export: Option<SftpTarget>,
+    /// Startup warnings to log once a subscriber is up (insecure or
+    /// deprecated settings). Never contains secrets.
+    pub warnings: Vec<String>,
 }
 
 impl Config {
@@ -24,12 +58,37 @@ impl Config {
     }
 
     pub fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Result<Self> {
+        let mut warnings = Vec::new();
         let host = lookup("MIKROTIK_HOST").context("MIKROTIK_HOST not set")?;
-        let port = parse_port_env("MIKROTIK_PORT", lookup("MIKROTIK_PORT"))?.unwrap_or(443);
+        let explicit_scheme = match lookup("MIKROTIK_SCHEME") {
+            None => None,
+            Some(v) => match v.to_ascii_lowercase().as_str() {
+                "https" => Some(Scheme::Https),
+                "http" => Some(Scheme::Http),
+                _ => bail!("MIKROTIK_SCHEME={v:?} is not a scheme: use https or http"),
+            },
+        };
+        let port = parse_port_env("MIKROTIK_PORT", lookup("MIKROTIK_PORT"))?;
+        if port == Some(80) && explicit_scheme.is_none() {
+            bail!(
+                "MIKROTIK_PORT=80 would send the RouterOS password in cleartext over http; \
+                set MIKROTIK_SCHEME=http to accept that, or use the www-ssl port"
+            );
+        }
+        let scheme = explicit_scheme.unwrap_or(Scheme::Https);
+        let port = port.unwrap_or(match scheme {
+            Scheme::Https => 443,
+            Scheme::Http => 80,
+        });
         let username = lookup("MIKROTIK_USER").unwrap_or_else(|| "admin".into());
         let password = lookup("MIKROTIK_PASSWORD").context("MIKROTIK_PASSWORD not set")?;
-        let tls_verify =
-            parse_bool_env("MIKROTIK_TLS_VERIFY", lookup("MIKROTIK_TLS_VERIFY"))?.unwrap_or(false);
+        let tls = tls_from_lookup(&lookup, scheme, &mut warnings)?;
+        if scheme == Scheme::Http {
+            warnings.push(
+                "MIKROTIK_SCHEME=http: the RouterOS password is sent in cleartext on every request"
+                    .into(),
+            );
+        }
         let backup_encrypt =
             parse_bool_env("MIKROTIK_BACKUP_ENCRYPT", lookup("MIKROTIK_BACKUP_ENCRYPT"))?
                 .unwrap_or(true);
@@ -63,13 +122,66 @@ impl Config {
             host,
             port,
             username,
+            scheme,
             password,
-            tls_verify,
+            tls,
             backup_encrypt,
             writes_enabled,
             backup_export,
+            warnings,
         })
     }
+}
+
+/// Resolves the TLS settings. Verification is the default; turning it off
+/// takes `MIKROTIK_TLS_INSECURE=true` (or the deprecated
+/// `MIKROTIK_TLS_VERIFY=false`), and contradictory settings are refused.
+fn tls_from_lookup(
+    lookup: &impl Fn(&str) -> Option<String>,
+    scheme: Scheme,
+    warnings: &mut Vec<String>,
+) -> Result<Tls> {
+    let ca_file = lookup("MIKROTIK_CA_FILE")
+        .filter(|v| !v.trim().is_empty())
+        .map(PathBuf::from);
+    let insecure = parse_bool_env("MIKROTIK_TLS_INSECURE", lookup("MIKROTIK_TLS_INSECURE"))?;
+    let legacy_verify = parse_bool_env("MIKROTIK_TLS_VERIFY", lookup("MIKROTIK_TLS_VERIFY"))?;
+
+    if let Some(verify) = legacy_verify {
+        warnings.push(format!(
+            "MIKROTIK_TLS_VERIFY is deprecated: {}",
+            if verify {
+                "verification is the default now; remove it"
+            } else {
+                "use MIKROTIK_TLS_INSECURE=true, or better MIKROTIK_CA_FILE with the router's certificate"
+            }
+        ));
+        if insecure.is_some_and(|i| i == verify) {
+            bail!(
+                "MIKROTIK_TLS_INSECURE and the deprecated MIKROTIK_TLS_VERIFY contradict each other"
+            );
+        }
+    }
+    let insecure = insecure.or(legacy_verify.map(|v| !v)).unwrap_or(false);
+
+    if scheme == Scheme::Http {
+        if ca_file.is_some() {
+            bail!("MIKROTIK_CA_FILE is set but MIKROTIK_SCHEME=http uses no TLS");
+        }
+        return Ok(Tls::Insecure);
+    }
+    if insecure {
+        if ca_file.is_some() {
+            bail!("MIKROTIK_CA_FILE and MIKROTIK_TLS_INSECURE=true contradict each other");
+        }
+        warnings.push(
+            "TLS certificate verification is disabled: anyone on the path can impersonate the \
+            router and read the RouterOS password. Set MIKROTIK_CA_FILE instead"
+                .into(),
+        );
+        return Ok(Tls::Insecure);
+    }
+    Ok(Tls::Verify { ca_file })
 }
 
 /// Parses a boolean variable: `true`/`false`, `1`/`0` or `yes`/`no`, in any
@@ -158,11 +270,90 @@ mod tests {
 
     #[test]
     fn tls_verify_mixed_case_false_disables_verification() {
-        assert!(
-            !config(&[("MIKROTIK_TLS_VERIFY", "False")])
-                .unwrap()
-                .tls_verify
+        assert_eq!(
+            config(&[("MIKROTIK_TLS_VERIFY", "False")]).unwrap().tls,
+            Tls::Insecure
         );
+    }
+
+    #[test]
+    fn verification_is_the_default() {
+        let c = config(&[]).unwrap();
+        assert_eq!(c.scheme, Scheme::Https);
+        assert_eq!(c.port, 443);
+        assert_eq!(c.tls, Tls::Verify { ca_file: None });
+        assert!(c.warnings.is_empty(), "{:?}", c.warnings);
+    }
+
+    #[test]
+    fn ca_file_verifies_against_that_file() {
+        let c = config(&[("MIKROTIK_CA_FILE", "/etc/r.pem")]).unwrap();
+        assert_eq!(
+            c.tls,
+            Tls::Verify {
+                ca_file: Some("/etc/r.pem".into())
+            }
+        );
+    }
+
+    #[test]
+    fn insecure_needs_the_explicit_opt_in_and_warns() {
+        let c = config(&[("MIKROTIK_TLS_INSECURE", "true")]).unwrap();
+        assert_eq!(c.tls, Tls::Insecure);
+        assert!(
+            c.warnings
+                .iter()
+                .any(|w| w.contains("verification is disabled"))
+        );
+    }
+
+    #[test]
+    fn legacy_tls_verify_false_still_works_and_warns_deprecated() {
+        let c = config(&[("MIKROTIK_TLS_VERIFY", "false")]).unwrap();
+        assert_eq!(c.tls, Tls::Insecure);
+        assert!(c.warnings.iter().any(|w| w.contains("deprecated")));
+        let c = config(&[("MIKROTIK_TLS_VERIFY", "true")]).unwrap();
+        assert_eq!(c.tls, Tls::Verify { ca_file: None });
+        assert!(c.warnings.iter().any(|w| w.contains("deprecated")));
+    }
+
+    #[test]
+    fn contradictory_tls_settings_are_refused() {
+        for vars in [
+            &[
+                ("MIKROTIK_TLS_INSECURE", "true"),
+                ("MIKROTIK_TLS_VERIFY", "true"),
+            ][..],
+            &[
+                ("MIKROTIK_TLS_INSECURE", "false"),
+                ("MIKROTIK_TLS_VERIFY", "false"),
+            ],
+            &[
+                ("MIKROTIK_TLS_INSECURE", "true"),
+                ("MIKROTIK_CA_FILE", "/r.pem"),
+            ],
+            &[("MIKROTIK_SCHEME", "http"), ("MIKROTIK_CA_FILE", "/r.pem")],
+        ] {
+            assert!(config(vars).is_err(), "{vars:?} accepted");
+        }
+    }
+
+    #[test]
+    fn port_80_alone_is_refused() {
+        let err = config(&[("MIKROTIK_PORT", "80")])
+            .err()
+            .expect("port 80 accepted");
+        assert!(err.to_string().contains("MIKROTIK_SCHEME=http"), "{err}");
+    }
+
+    #[test]
+    fn explicit_http_is_allowed_with_a_warning() {
+        let c = config(&[("MIKROTIK_SCHEME", "http")]).unwrap();
+        assert_eq!((c.scheme, c.port), (Scheme::Http, 80));
+        assert!(c.warnings.iter().any(|w| w.contains("cleartext")));
+        let c = config(&[("MIKROTIK_SCHEME", "HTTP"), ("MIKROTIK_PORT", "8080")]).unwrap();
+        assert_eq!((c.scheme, c.port), (Scheme::Http, 8080));
+        assert!(config(&[("MIKROTIK_SCHEME", "ftp")]).is_err());
     }
 
     #[test]

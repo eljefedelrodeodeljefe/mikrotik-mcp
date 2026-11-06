@@ -68,8 +68,11 @@ If both are set, the API token takes precedence.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MIKROTIK_PORT` | `443` | RouterOS REST API port |
-| `MIKROTIK_TLS_VERIFY` | `false` | Verify TLS certificate (`true`/`false`) |
+| `MIKROTIK_SCHEME` | `https` | `https`, or `http` (cleartext, see [TLS](#tls)) |
+| `MIKROTIK_PORT` | `443` (`80` with `http`) | RouterOS REST API port |
+| `MIKROTIK_CA_FILE` | — | PEM CA to verify the router against ([TLS](#tls)) |
+| `MIKROTIK_TLS_INSECURE` | `false` | Accept any certificate (warns) |
+| `MIKROTIK_TLS_VERIFY` | — | **Deprecated** inverse of `…_TLS_INSECURE` |
 | `MIKROTIK_BACKUP_ENCRYPT` | `true` | Encrypt backups with `MIKROTIK_PASSWORD` |
 | `MIKROTIK_ALLOW_WRITES` | `false` | Enable mutating tools |
 | `MIKROTIK_BACKUP_SFTP_HOST` | — | Push backups here via SFTP (see [Backups](#backups)); enables SFTP export when set |
@@ -82,8 +85,50 @@ Boolean variables take `true`/`false`, `1`/`0` or `yes`/`no`, in any case.
 Any other value, or a port that is not a number, stops the server at startup
 with an error naming the variable.
 
-The client picks HTTP for port 80 and HTTPS otherwise. If the device has
-only `www` (plain HTTP) enabled and no `www-ssl`, set `MIKROTIK_PORT=80`.
+## TLS
+
+Every request carries the RouterOS user and password (HTTP Basic auth), so
+the server verifies the router's certificate by default. A RouterOS device
+usually serves a certificate no public CA signed, so point
+`MIKROTIK_CA_FILE` at a PEM file holding the CA that signed the router's
+`www-ssl` certificate. Only the certificates in that file are trusted then,
+which pins the router. The certificate must name the address in
+`MIKROTIK_HOST` (for an IP, an `IP:` subject-alt-name).
+
+One way to set this up on the router:
+
+```routeros
+/certificate add name=local-ca common-name=local-ca \
+  key-usage=key-cert-sign,crl-sign
+/certificate sign local-ca
+/certificate add name=www common-name=192.168.88.1 \
+  subject-alt-name=IP:192.168.88.1 key-usage=tls-server
+/certificate sign www ca=local-ca
+/ip service set www-ssl certificate=www
+/certificate export-certificate local-ca
+```
+
+Then download `cert_export_local-ca.crt` from **Files** and set
+`MIKROTIK_CA_FILE` to it. A self-signed certificate can go in the file
+directly as long as it is not marked as a CA: rustls refuses a CA
+certificate presented as the server's own (`CaUsedAsEndEntity`).
+
+`MIKROTIK_TLS_INSECURE=true` turns verification off. Anyone on the path can
+then impersonate the router and collect its password, so the server logs a
+warning on every start. `MIKROTIK_TLS_VERIFY` is the old name for the inverse
+setting; it still works and logs a deprecation warning.
+
+`MIKROTIK_SCHEME=http` talks to the plain `www` service and sends the password
+in cleartext. It must be set explicitly: `MIKROTIK_PORT=80` on its own is
+refused rather than quietly downgraded to http.
+
+### Upgrading from 0.x
+
+Verification used to be off by default. A config that set neither variable
+now fails the TLS handshake against a router with a self-signed certificate.
+Set `MIKROTIK_CA_FILE` (preferred), or `MIKROTIK_TLS_INSECURE=true` to keep the
+old behaviour. A config with `MIKROTIK_PORT=80` needs `MIKROTIK_SCHEME=http`
+added.
 
 ## Backups
 

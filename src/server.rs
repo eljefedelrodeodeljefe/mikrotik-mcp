@@ -26,8 +26,18 @@ impl MikrotikServer {
     }
 
     pub fn from_config(c: Config) -> anyhow::Result<Self> {
+        for w in &c.warnings {
+            tracing::warn!("{w}");
+        }
         Ok(Self {
-            client: RouterosClient::new(&c.host, c.port, &c.username, &c.password, c.tls_verify)?,
+            client: RouterosClient::new(
+                &c.host,
+                c.scheme,
+                c.port,
+                &c.username,
+                &c.password,
+                &c.tls,
+            )?,
             password: c.password,
             backup_encrypt: c.backup_encrypt,
             writes_enabled: c.writes_enabled,
@@ -981,7 +991,8 @@ impl ServerHandler for MikrotikServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "MikroTik RouterOS management via REST API (RouterOS 7.1+). \
                 Configure with MIKROTIK_HOST, MIKROTIK_USER, MIKROTIK_PASSWORD env vars. \
-                Optional: MIKROTIK_PORT (default 443), MIKROTIK_TLS_VERIFY (default false), \
+                Optional: MIKROTIK_PORT (default 443), MIKROTIK_CA_FILE (PEM CA or router \
+                certificate to verify against), MIKROTIK_TLS_INSECURE (default false), \
                 MIKROTIK_ALLOW_WRITES (default false — must be 'true' to enable mutating tools).",
         )
     }

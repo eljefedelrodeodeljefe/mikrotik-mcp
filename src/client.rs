@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Serialize, de::DeserializeOwned};
 
+use crate::config::{Scheme, Tls};
 use crate::params::RouterOsId;
 
 /// Where the router should push an encrypted backup, via RouterOS
@@ -29,19 +30,40 @@ pub struct RouterosClient {
 impl RouterosClient {
     pub fn new(
         host: &str,
+        scheme: Scheme,
         port: u16,
         username: &str,
         password: &str,
-        tls_verify: bool,
+        tls: &Tls,
     ) -> Result<Self> {
-        let client = Client::builder()
-            .danger_accept_invalid_certs(!tls_verify)
-            .build()
-            .context("failed to build HTTP client")?;
+        let mut builder = Client::builder();
+        match tls {
+            Tls::Insecure => builder = builder.danger_accept_invalid_certs(true),
+            Tls::Verify { ca_file: None } => {}
+            Tls::Verify {
+                ca_file: Some(path),
+            } => {
+                // Trust only what the file holds: a router behind a
+                // self-signed certificate is pinned, not merely accepted.
+                let pem = std::fs::read(path)
+                    .with_context(|| format!("MIKROTIK_CA_FILE: cannot read {}", path.display()))?;
+                let certs = reqwest::Certificate::from_pem_bundle(&pem)
+                    .with_context(|| format!("MIKROTIK_CA_FILE: {} is not PEM", path.display()))?;
+                anyhow::ensure!(
+                    !certs.is_empty(),
+                    "MIKROTIK_CA_FILE: {} holds no PEM certificate",
+                    path.display()
+                );
+                builder = builder.tls_built_in_root_certs(false);
+                for cert in certs {
+                    builder = builder.add_root_certificate(cert);
+                }
+            }
+        }
+        let client = builder.build().context("failed to build HTTP client")?;
 
-        let scheme = if port == 80 { "http" } else { "https" };
         Ok(Self {
-            base_url: format!("{}://{}:{}/rest", scheme, host, port),
+            base_url: format!("{}://{}:{}/rest", scheme.as_str(), host, port),
             host: host.to_string(),
             username: username.to_string(),
             password: password.to_string(),
@@ -361,5 +383,47 @@ mod tests {
     fn curl_config_quote_escapes_quotes_and_backslashes() {
         assert_eq!(curl_config_quote(r#"a"b\c"#), r#"a\"b\\c"#);
         assert_eq!(curl_config_quote("a\nb"), r"a\nb");
+    }
+
+    /// A throwaway self-signed CA, only ever parsed here.
+    const TEST_CA_PEM: &str = "-----BEGIN CERTIFICATE-----\nMIIBljCCAT2gAwIBAgIUGYsotU+zqFUaUvzKT2bn3ksNjRswCgYIKoZIzj0EAwIw\nGTEXMBUGA1UEAwwOdGVzdC1yb3V0ZXItY2EwHhcNMjYxMTA2MjExMzQ3WhcNMzYx\nMTAzMjExMzQ3WjAZMRcwFQYDVQQDDA50ZXN0LXJvdXRlci1jYTBZMBMGByqGSM49\nAgEGCCqGSM49AwEHA0IABNz/JbCyVDeENSjvDOZyKYSem+9w3hg6/9OHav55Lf28\n1UxTR8RPjpluBno1gqKJl0sUhje7IL4Z6ARoRaf6Fp2jYzBhMB0GA1UdDgQWBBT2\ndymnFHRXT0JESHLoQUvWlOGD+jAfBgNVHSMEGDAWgBT2dymnFHRXT0JESHLoQUvW\nlOGD+jAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwICBDAKBggqhkjOPQQD\nAgNHADBEAiA0AGaupp29/cyo5+ughsx7SJ1KvnMVcZo27lu2VZaQUgIgQQwZ88JB\nDy7uULaSemtlQ47tkOXJm0KRF3LJ9x/JKbk=\n-----END CERTIFICATE-----\n";
+
+    fn write_temp(name: &str, contents: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("mikrotik-mcp-{}-{name}", std::process::id()));
+        std::fs::write(&path, contents).unwrap();
+        path
+    }
+
+    fn with_ca(path: std::path::PathBuf) -> Result<RouterosClient> {
+        let tls = Tls::Verify {
+            ca_file: Some(path),
+        };
+        RouterosClient::new("192.0.2.1", Scheme::Https, 443, "admin", "pw", &tls)
+    }
+
+    #[test]
+    fn ca_file_with_a_pem_certificate_builds_a_client() {
+        let client = with_ca(write_temp("ca.pem", TEST_CA_PEM)).unwrap();
+        assert_eq!(client.base_url, "https://192.0.2.1:443/rest");
+    }
+
+    #[test]
+    fn ca_file_without_a_certificate_is_an_error() {
+        let err = with_ca(write_temp("junk.pem", "not a certificate\n"))
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("MIKROTIK_CA_FILE"), "{err}");
+        let err = with_ca("/nonexistent/ca.pem".into()).err().unwrap();
+        assert!(err.to_string().contains("cannot read"), "{err}");
+    }
+
+    #[test]
+    fn scheme_is_taken_from_config_not_guessed_from_the_port() {
+        let tls = Tls::Verify { ca_file: None };
+        let client = RouterosClient::new("r", Scheme::Https, 80, "u", "p", &tls).unwrap();
+        assert_eq!(client.base_url, "https://r:80/rest");
+        let client =
+            RouterosClient::new("r", Scheme::Http, 8080, "u", "p", &Tls::Insecure).unwrap();
+        assert_eq!(client.base_url, "http://r:8080/rest");
     }
 }

@@ -61,6 +61,12 @@ The server reads RouterOS connection settings from env:
 - `MIKROTIK_USER` + `MIKROTIK_PASSWORD` (option A)
 - `MIKROTIK_API_TOKEN` (option B, takes precedence)
 
+TLS verification is on by default. `MIKROTIK_CA_FILE` pins the router's
+certificate; `MIKROTIK_TLS_INSECURE=true` and `MIKROTIK_SCHEME=http` are
+explicit opt-ins that warn at startup. Don't add a code path that turns
+verification off or picks http on its own. `src/config.rs` owns all env
+parsing, and boolean variables go through `parse_bool_env`.
+
 When iterating, run `bacon` in a second terminal. The server detects binary
 mtime changes and exits, and the MCP client auto-restarts it. See `bacon.toml`.
 
