@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::config::{Scheme, Tls};
@@ -18,6 +18,42 @@ pub struct SftpTarget {
     /// Remote directory (or empty for the login home dir).
     pub path: String,
 }
+
+/// A failed RouterOS REST call, kept typed so the MCP layer can tell a
+/// refusal by the router from a router it could not reach.
+#[derive(Debug, thiserror::Error)]
+pub enum RouterosError {
+    /// RouterOS answered with a non-2xx status. `message` and `detail` come
+    /// from its `{"error", "message", "detail"}` body when it sent one.
+    #[error("RouterOS returned HTTP {status}{}", describe(message, detail))]
+    Status {
+        status: StatusCode,
+        message: Option<String>,
+        detail: Option<String>,
+    },
+    /// No HTTP response: connection, TLS or timeout failure.
+    #[error("cannot reach RouterOS: {0}")]
+    Transport(#[source] reqwest::Error),
+}
+
+fn describe(message: &Option<String>, detail: &Option<String>) -> String {
+    match (message, detail) {
+        (Some(m), Some(d)) => format!(": {m}: {d}"),
+        (Some(s), None) | (None, Some(s)) => format!(": {s}"),
+        (None, None) => String::new(),
+    }
+}
+
+/// The error body RouterOS sends with a non-2xx status, e.g.
+/// `{"error": 400, "message": "Bad Request", "detail": "no such item"}`.
+#[derive(serde::Deserialize)]
+struct ErrorBody {
+    message: Option<String>,
+    detail: Option<String>,
+}
+
+/// How much of a non-JSON error body to keep.
+const MAX_RAW_ERROR_BODY: usize = 200;
 
 pub struct RouterosClient {
     base_url: String,
@@ -71,16 +107,39 @@ impl RouterosClient {
         })
     }
 
-    pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
-        let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        self.client
-            .get(&url)
+    /// Sends `req` with credentials and turns a non-2xx answer into a
+    /// [`RouterosError::Status`] that carries RouterOS's own explanation.
+    async fn send(&self, req: RequestBuilder) -> Result<Response> {
+        let resp = req
             .basic_auth(&self.username, Some(&self.password))
             .send()
             .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?
+            .map_err(RouterosError::Transport)?;
+        let status = resp.status();
+        if status.is_success() {
+            return Ok(resp);
+        }
+        let text = resp.text().await.unwrap_or_default();
+        let (message, detail) = match serde_json::from_str::<ErrorBody>(&text) {
+            Ok(body) => (body.message, body.detail),
+            Err(_) if text.trim().is_empty() => (None, None),
+            Err(_) => (
+                None,
+                Some(text.trim().chars().take(MAX_RAW_ERROR_BODY).collect()),
+            ),
+        };
+        Err(RouterosError::Status {
+            status,
+            message,
+            detail,
+        }
+        .into())
+    }
+
+    pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
+        self.send(self.client.get(&url))
+            .await?
             .json()
             .await
             .context("failed to parse JSON response")
@@ -88,15 +147,8 @@ impl RouterosClient {
 
     pub async fn post<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        self.client
-            .post(&url)
-            .basic_auth(&self.username, Some(&self.password))
-            .json(body)
-            .send()
-            .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?
+        self.send(self.client.post(&url).json(body))
+            .await?
             .json()
             .await
             .context("failed to parse JSON response")
@@ -107,15 +159,8 @@ impl RouterosClient {
     /// rejected for create payloads.
     pub async fn put<B: Serialize, T: DeserializeOwned>(&self, path: &str, body: &B) -> Result<T> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        self.client
-            .put(&url)
-            .basic_auth(&self.username, Some(&self.password))
-            .json(body)
-            .send()
-            .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?
+        self.send(self.client.put(&url).json(body))
+            .await?
             .json()
             .await
             .context("failed to parse JSON response")
@@ -135,15 +180,8 @@ impl RouterosClient {
             path.trim_start_matches('/'),
             id.as_str()
         );
-        self.client
-            .patch(&url)
-            .basic_auth(&self.username, Some(&self.password))
-            .json(body)
-            .send()
-            .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?
+        self.send(self.client.patch(&url).json(body))
+            .await?
             .json()
             .await
             .context("failed to parse JSON response")
@@ -151,15 +189,7 @@ impl RouterosClient {
 
     pub async fn post_void<B: Serialize>(&self, path: &str, body: &B) -> Result<()> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        self.client
-            .post(&url)
-            .basic_auth(&self.username, Some(&self.password))
-            .json(body)
-            .send()
-            .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?;
+        self.send(self.client.post(&url).json(body)).await?;
         Ok(())
     }
 
@@ -274,14 +304,7 @@ impl RouterosClient {
             path.trim_start_matches('/'),
             id.as_str()
         );
-        self.client
-            .delete(&url)
-            .basic_auth(&self.username, Some(&self.password))
-            .send()
-            .await
-            .context("request failed")?
-            .error_for_status()
-            .context("RouterOS returned error status")?;
+        self.send(self.client.delete(&url)).await?;
         Ok(())
     }
 }
