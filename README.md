@@ -111,11 +111,14 @@ refused rather than quietly downgraded to http.
 
 ### Upgrading from 0.x
 
-Verification used to be off by default. A config that set neither variable
-now fails the TLS handshake against a router with a self-signed certificate.
-Set `MIKROTIK_CA_FILE` (preferred), or `MIKROTIK_TLS_INSECURE=true` to keep the
-old behaviour. A config with `MIKROTIK_PORT=80` needs `MIKROTIK_SCHEME=http`
-added.
+- Verification used to be off by default. A config that set neither variable
+  now fails the TLS handshake against a router with a self-signed
+  certificate. Set `MIKROTIK_CA_FILE` (preferred), or
+  `MIKROTIK_TLS_INSECURE=true` to keep the old behaviour.
+- A config with `MIKROTIK_PORT=80` needs `MIKROTIK_SCHEME=http` added.
+- Boolean and port variables are parsed strictly: an unrecognised value stops
+  the server at startup, and `TRUE`/`False` now mean what they say.
+- `restore_backup` needs `confirm: true` in the call.
 
 ## Backups
 
