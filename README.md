@@ -100,6 +100,12 @@ one of two ways:
 `restore_backup` still uploads over FTP; SFTP-based restore is not
 implemented yet.
 
+**FTP is insecure.** It sends `MIKROTIK_USER` and `MIKROTIK_PASSWORD`, and the
+backup file, unencrypted over the network, so anyone on the path can read the
+router's admin password. Locally, the server hands the credentials to `curl`
+on its stdin (`curl --config -`), never on the command line, so other users on
+the machine can't read them through `ps`.
+
 ## The write gate is a convenience guard
 
 `MIKROTIK_ALLOW_WRITES=true` enables the mutating tools. Anyone who can set

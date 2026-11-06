@@ -170,18 +170,13 @@ impl RouterosClient {
         self.post("tool/fetch", &body).await
     }
 
+    /// Pulls `filename` from the router over FTP. FTP is cleartext: the
+    /// router password crosses the network unencrypted (see README).
     pub async fn ftp_download(&self, filename: &str) -> Result<Vec<u8>> {
-        let output = tokio::process::Command::new("curl")
-            .args([
-                "--silent",
-                "--fail",
-                "--user",
-                &format!("{}:{}", self.username, self.password),
-                &format!("ftp://{}:21/{}", self.host, filename),
-            ])
-            .output()
+        let (cmd, config) = self.ftp_command(None, filename);
+        let output = run_curl(cmd, &config)
             .await
-            .context("curl FTP: failed to spawn")?;
+            .context("curl FTP: failed to run")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -195,20 +190,13 @@ impl RouterosClient {
         Ok(output.stdout)
     }
 
+    /// Pushes `local_path` to the router over FTP. Cleartext, like
+    /// [`ftp_download`](Self::ftp_download).
     pub async fn ftp_upload(&self, local_path: &str, remote_filename: &str) -> Result<()> {
-        let output = tokio::process::Command::new("curl")
-            .args([
-                "--silent",
-                "--fail",
-                "--user",
-                &format!("{}:{}", self.username, self.password),
-                "-T",
-                local_path,
-                &format!("ftp://{}:21/{}", self.host, remote_filename),
-            ])
-            .output()
+        let (cmd, config) = self.ftp_command(Some(local_path), remote_filename);
+        let output = run_curl(cmd, &config)
             .await
-            .context("curl FTP upload: failed to spawn")?;
+            .context("curl FTP upload: failed to run")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -220,6 +208,28 @@ impl RouterosClient {
         }
 
         Ok(())
+    }
+
+    /// Builds the curl invocation for an FTP transfer. The credentials are
+    /// returned separately as a curl config (`--config -`) to be written to
+    /// curl's stdin: anything on the command line is readable by every local
+    /// user through `ps` or `/proc/<pid>/cmdline`.
+    fn ftp_command(
+        &self,
+        upload_from: Option<&str>,
+        remote_filename: &str,
+    ) -> (tokio::process::Command, String) {
+        let mut cmd = tokio::process::Command::new("curl");
+        cmd.args(["--silent", "--fail", "--config", "-"]);
+        if let Some(local_path) = upload_from {
+            cmd.arg("-T").arg(local_path);
+        }
+        cmd.arg(format!("ftp://{}:21/{}", self.host, remote_filename));
+        let config = format!(
+            "user = \"{}\"\n",
+            curl_config_quote(&format!("{}:{}", self.username, self.password))
+        );
+        (cmd, config)
     }
 
     /// Creates a client pointing at an arbitrary base URL for use in tests.
@@ -254,6 +264,42 @@ impl RouterosClient {
     }
 }
 
+/// Runs `cmd`, feeding `config` to its stdin, and collects its output.
+async fn run_curl(
+    mut cmd: tokio::process::Command,
+    config: &str,
+) -> std::io::Result<std::process::Output> {
+    use std::process::Stdio;
+    use tokio::io::AsyncWriteExt;
+
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().expect("stdin is piped");
+    stdin.write_all(config.as_bytes()).await?;
+    drop(stdin);
+    child.wait_with_output().await
+}
+
+/// Escapes a value for a double-quoted curl config parameter, where `\`
+/// starts an escape sequence.
+fn curl_config_quote(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -282,5 +328,38 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let id = RouterOsId::try_from("1A").unwrap();
         client.delete("ip/dns/static", &id).await.unwrap();
+    }
+
+    fn argv(cmd: &tokio::process::Command) -> Vec<String> {
+        cmd.as_std()
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn ftp_password_is_never_on_curl_argv() {
+        let client = RouterosClient::for_test("http://router");
+        for (cmd, config) in [
+            client.ftp_command(None, "r.backup"),
+            client.ftp_command(Some("/tmp/r.backup"), "r.backup"),
+        ] {
+            let args = argv(&cmd);
+            assert!(
+                args.iter().all(|a| !a.contains("test")),
+                "password on argv: {args:?}"
+            );
+            assert!(
+                args.iter().any(|a| a == "-"),
+                "config not read from stdin: {args:?}"
+            );
+            assert_eq!(config, "user = \"admin:test\"\n");
+        }
+    }
+
+    #[test]
+    fn curl_config_quote_escapes_quotes_and_backslashes() {
+        assert_eq!(curl_config_quote(r#"a"b\c"#), r#"a\"b\\c"#);
+        assert_eq!(curl_config_quote("a\nb"), r"a\nb");
     }
 }
