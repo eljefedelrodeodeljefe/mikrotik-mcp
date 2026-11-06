@@ -2,6 +2,7 @@ use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
 use crate::params::AddDnsStaticParams;
+use crate::params::RouterOsId;
 
 pub async fn get_settings(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/dns").await
@@ -22,7 +23,7 @@ pub async fn add_static(client: &RouterosClient, p: &AddDnsStaticParams) -> anyh
     client.put("ip/dns/static", &body).await
 }
 
-pub async fn remove_static(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_static(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/dns/static", id).await
 }
 

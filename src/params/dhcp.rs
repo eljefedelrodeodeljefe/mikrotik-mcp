@@ -1,6 +1,8 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use super::RouterOsId;
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct AddDhcpStaticLeaseParams {
     #[schemars(description = "Client MAC address (e.g. 'AA:BB:CC:DD:EE:FF')")]
@@ -14,13 +16,13 @@ pub struct AddDhcpStaticLeaseParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct DhcpLeaseIdParams {
     #[schemars(description = "Lease .id as returned by list_dhcp_leases (e.g. '*1')")]
-    pub id: String,
+    pub id: RouterOsId,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SetDhcpLeaseParams {
     #[schemars(description = "Lease .id as returned by list_dhcp_leases (e.g. '*1')")]
-    pub id: String,
+    pub id: RouterOsId,
     #[schemars(description = "New IP address for this lease")]
     pub address: Option<String>,
     #[schemars(description = "New client MAC address (e.g. 'AA:BB:CC:DD:EE:FF')")]

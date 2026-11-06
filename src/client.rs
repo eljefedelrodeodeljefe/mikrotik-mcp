@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Serialize, de::DeserializeOwned};
 
+use crate::params::RouterOsId;
+
 /// Where the router should push an encrypted backup, via RouterOS
 /// `/tool fetch upload=yes mode=sftp`. The router initiates the connection
 /// (egress only), so this works even when inbound FTP is disabled by a
@@ -102,11 +104,15 @@ impl RouterosClient {
     pub async fn patch<B: Serialize, T: DeserializeOwned>(
         &self,
         path: &str,
-        id: &str,
+        id: &RouterOsId,
         body: &B,
     ) -> Result<T> {
-        let id = normalise_id(id);
-        let url = format!("{}/{}/{}", self.base_url, path.trim_start_matches('/'), id);
+        let url = format!(
+            "{}/{}/{}",
+            self.base_url,
+            path.trim_start_matches('/'),
+            id.as_str()
+        );
         self.client
             .patch(&url)
             .basic_auth(&self.username, Some(&self.password))
@@ -229,9 +235,13 @@ impl RouterosClient {
         }
     }
 
-    pub async fn delete(&self, path: &str, id: &str) -> Result<()> {
-        let id = normalise_id(id);
-        let url = format!("{}/{}/{}", self.base_url, path.trim_start_matches('/'), id);
+    pub async fn delete(&self, path: &str, id: &RouterOsId) -> Result<()> {
+        let url = format!(
+            "{}/{}/{}",
+            self.base_url,
+            path.trim_start_matches('/'),
+            id.as_str()
+        );
         self.client
             .delete(&url)
             .basic_auth(&self.username, Some(&self.password))
@@ -244,11 +254,33 @@ impl RouterosClient {
     }
 }
 
-/// RouterOS item IDs look like `*1`; accept them with or without the leading `*`.
-fn normalise_id(id: &str) -> String {
-    if id.starts_with('*') {
-        id.to_string()
-    } else {
-        format!("*{id}")
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// Why ids are parsed: the URL parser resolves `..`, so a raw id is a
+    /// path into any other menu.
+    #[test]
+    fn url_parser_resolves_dot_segments_in_ids() {
+        let url =
+            reqwest::Url::parse("https://router/rest/ip/dns/static/*1/../../../firewall/filter/*5")
+                .unwrap();
+        assert_eq!(url.path(), "/rest/ip/firewall/filter/*5");
+    }
+
+    #[tokio::test]
+    async fn delete_addresses_the_item_under_its_own_menu() {
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path("/rest/ip/dns/static/*1A"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = RouterosClient::for_test(&server.uri());
+        let id = RouterOsId::try_from("1A").unwrap();
+        client.delete("ip/dns/static", &id).await.unwrap();
     }
 }

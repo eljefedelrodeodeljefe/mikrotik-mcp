@@ -1,6 +1,8 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use super::RouterOsId;
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct WifiMonitorParams {
     #[schemars(
@@ -15,7 +17,7 @@ pub struct ProvisionWifiRadioParams {
         description = "Radio .id as returned by list_wifi_radios (e.g. '*5'). A [find ...] \
             expression is not accepted over REST"
     )]
-    pub id: String,
+    pub id: RouterOsId,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -23,7 +25,7 @@ pub struct SetCapsmanChannelParams {
     #[schemars(
         description = "Channel profile .id as returned by list_capsman_channels (e.g. '*1')"
     )]
-    pub id: String,
+    pub id: RouterOsId,
     #[schemars(
         description = "Control channel frequency in MHz (e.g. '2412'). Empty string clears it \
             back to automatic selection"

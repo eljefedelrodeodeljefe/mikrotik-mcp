@@ -2,6 +2,7 @@ use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
 use crate::params::AddRouteParams;
+use crate::params::RouterOsId;
 
 pub async fn list_routes(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/route").await
@@ -19,7 +20,7 @@ pub async fn add_route(client: &RouterosClient, p: &AddRouteParams) -> anyhow::R
     client.put("ip/route", &body).await
 }
 
-pub async fn remove_route(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_route(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/route", id).await
 }
 

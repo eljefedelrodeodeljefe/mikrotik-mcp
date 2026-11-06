@@ -515,7 +515,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<DhcpLeaseIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::dhcp::make_lease_static(&self.client, &p.id)
             .await
             .map_err(tool_error)?;
@@ -530,7 +529,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<SetDhcpLeaseParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::dhcp::set_lease(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -764,7 +762,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<SetCapsmanChannelParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::wifi::set_capsman_channel(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -857,7 +854,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<ProvisionWifiRadioParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::wifi::provision_wifi_radio(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -993,7 +989,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<SetSmbUserParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::smb::set_user(&self.client, &p)
             .await
             .map_err(tool_error)?;

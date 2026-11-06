@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
+use crate::params::RouterOsId;
 use crate::params::{AddSmbShareParams, AddSmbUserParams, SetSmbParams, SetSmbUserParams};
 
 // ── Service ────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ pub async fn add_share(client: &RouterosClient, p: &AddSmbShareParams) -> anyhow
     client.put("ip/smb/shares", &body).await
 }
 
-pub async fn remove_share(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_share(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/smb/shares", id).await
 }
 
@@ -74,7 +75,7 @@ pub async fn set_user(client: &RouterosClient, p: &SetSmbUserParams) -> anyhow::
     client.post("ip/smb/users/set", &body).await
 }
 
-pub async fn remove_user(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_user(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/smb/users", id).await
 }
 
@@ -208,7 +209,7 @@ mod tests {
 
         let client = RouterosClient::for_test(&server.uri());
         let p = SetSmbUserParams {
-            id: "*2".into(),
+            id: crate::params::RouterOsId::try_from("*2").unwrap(),
             password: None,
             read_only: Some(false),
             disabled: None,

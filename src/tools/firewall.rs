@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
+use crate::params::RouterOsId;
 use crate::params::{
     AddFirewallAddressListParams, AddFirewallFilterParams, AddFirewallMangleParams,
     AddFirewallNatParams,
@@ -39,7 +40,7 @@ pub async fn add_filter(
     client.put("ip/firewall/filter", &body).await
 }
 
-pub async fn remove_filter(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_filter(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/firewall/filter", id).await
 }
 
@@ -76,7 +77,7 @@ pub async fn add_nat(client: &RouterosClient, p: &AddFirewallNatParams) -> anyho
     client.put("ip/firewall/nat", &body).await
 }
 
-pub async fn remove_nat(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_nat(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/firewall/nat", id).await
 }
 
@@ -137,7 +138,7 @@ pub async fn add_mangle(
     client.put("ip/firewall/mangle", &body).await
 }
 
-pub async fn remove_mangle(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_mangle(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/firewall/mangle", id).await
 }
 
@@ -159,7 +160,7 @@ pub async fn add_address_list(
     client.put("ip/firewall/address-list", &body).await
 }
 
-pub async fn remove_address_list(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_address_list(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/firewall/address-list", id).await
 }
 

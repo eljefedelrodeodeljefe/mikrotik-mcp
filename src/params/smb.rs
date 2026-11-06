@@ -1,6 +1,8 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use super::RouterOsId;
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SetSmbParams {
     #[schemars(description = "Service state: 'yes', 'no', or 'auto'")]
@@ -46,7 +48,7 @@ pub struct AddSmbUserParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SetSmbUserParams {
     #[schemars(description = "User .id as returned by list_smb_users (e.g. '*1')")]
-    pub id: String,
+    pub id: RouterOsId,
     #[schemars(description = "New password")]
     pub password: Option<String>,
     #[schemars(description = "Read-only access")]

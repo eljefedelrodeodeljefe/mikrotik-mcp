@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
+use crate::params::RouterOsId;
 use crate::params::{AddDhcpStaticLeaseParams, SetDhcpLeaseParams};
 
 pub async fn list_servers(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -22,7 +23,7 @@ pub async fn add_static_lease(
     client.put("ip/dhcp-server/lease", &body).await
 }
 
-pub async fn remove_lease(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_lease(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/dhcp-server/lease", id).await
 }
 
@@ -32,7 +33,7 @@ pub async fn remove_lease(client: &RouterosClient, id: &str) -> anyhow::Result<(
 /// Preferred over `add_static_lease` when the client already holds a dynamic
 /// lease: RouterOS converts the binding in place, so the address is pinned
 /// without creating a second lease entry for the same MAC.
-pub async fn make_lease_static(client: &RouterosClient, id: &str) -> anyhow::Result<Value> {
+pub async fn make_lease_static(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<Value> {
     let body = json!({ "numbers": id });
     client.post("ip/dhcp-server/lease/make-static", &body).await
 }
@@ -130,7 +131,10 @@ mod tests {
             .await;
 
         let client = RouterosClient::for_test(&server.uri());
-        let result = make_lease_static(&client, "*1").await.unwrap();
+        let result =
+            make_lease_static(&client, &crate::params::RouterOsId::try_from("*1").unwrap())
+                .await
+                .unwrap();
         assert_eq!(result[".id"], "*2");
     }
 
@@ -148,7 +152,7 @@ mod tests {
 
         let client = RouterosClient::for_test(&server.uri());
         let p = SetDhcpLeaseParams {
-            id: "*2".into(),
+            id: crate::params::RouterOsId::try_from("*2").unwrap(),
             address: None,
             mac_address: None,
             comment: Some("reserved".into()),
@@ -162,7 +166,7 @@ mod tests {
     async fn set_lease_refuses_an_empty_change() {
         let client = RouterosClient::for_test("http://127.0.0.1:1");
         let p = SetDhcpLeaseParams {
-            id: "*1".into(),
+            id: crate::params::RouterOsId::try_from("*1").unwrap(),
             address: None,
             mac_address: None,
             comment: None,
