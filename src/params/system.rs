@@ -25,6 +25,11 @@ pub struct RestoreBackupParams {
     pub input_path: String,
     #[schemars(description = "Decryption password — defaults to MIKROTIK_PASSWORD when omitted")]
     pub password: Option<String>,
+    #[schemars(
+        description = "Must be true. The device reboots and its configuration is replaced: set \
+            this only after the user has explicitly approved this restore"
+    )]
+    pub confirm: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

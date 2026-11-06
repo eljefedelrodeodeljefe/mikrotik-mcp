@@ -147,13 +147,21 @@ impl MikrotikServer {
     }
 
     #[tool(
-        description = "Upload a local .backup file to the device and load it. Decrypted with MIKROTIK_PASSWORD by default. WARNING: device will reboot after restore."
+        description = "Upload a local .backup file to the device and load it. Decrypted with MIKROTIK_PASSWORD by default. WARNING: device will reboot after restore. Requires confirm=true, set only after the user has approved this restore."
     )]
     async fn restore_backup(
         &self,
         Parameters(p): Parameters<RestoreBackupParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
+        if !p.confirm {
+            return Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                "restore_backup reboots the device and replaces its configuration: ask the user, \
+                    then call again with confirm=true",
+                None,
+            ));
+        }
         let msg =
             tools::system::restore_backup(&self.client, &p, &self.password, self.backup_encrypt)
                 .await
@@ -1113,6 +1121,23 @@ mod tests {
             reached.is_empty(),
             "requests reached the router: {reached:?}"
         );
+        client.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn restore_backup_needs_confirm_true() {
+        let router = MockServer::start().await;
+        let client = connect(server(true, &router)).await;
+        for args in [
+            json!({"input_path": "/tmp/r.backup"}),
+            json!({"input_path": "/tmp/r.backup", "confirm": false}),
+        ] {
+            let err = call(&client, "restore_backup", args.as_object().unwrap().clone())
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, ErrorCode::INVALID_PARAMS, "{args}: {err:?}");
+        }
+        assert!(router.received_requests().await.unwrap().is_empty());
         client.cancel().await.unwrap();
     }
 

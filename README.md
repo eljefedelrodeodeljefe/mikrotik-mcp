@@ -147,7 +147,8 @@ one of two ways:
   credentials in cleartext. Avoid it on hardened or management-locked routers.
 
 `restore_backup` still uploads over FTP; SFTP-based restore is not
-implemented yet.
+implemented yet. It reboots the device, so it refuses to run unless the call
+carries `confirm: true`.
 
 **FTP is insecure.** It sends `MIKROTIK_USER` and `MIKROTIK_PASSWORD`, and the
 backup file, unencrypted over the network, so anyone on the path can read the
