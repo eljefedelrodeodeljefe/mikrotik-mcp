@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.7.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.6.0...v0.7.0) (2026-11-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* `restore_backup` calls without `confirm: true` are refused.
+* with neither variable set the server now verifies the router's certificate, so a router with a self-signed certificate fails the handshake. Set `MIKROTIK_CA_FILE` to the router's CA (preferred) or `MIKROTIK_TLS_INSECURE=true` for the old behaviour. `MIKROTIK_PORT=80` now also needs `MIKROTIK_SCHEME=http`.
+* a boolean or port variable with an unrecognised value now stops the server at startup instead of being read as a default. Mixed-case values (`TRUE`, `False`) are now honoured, so `MIKROTIK_TLS_VERIFY=False` disables verification and `MIKROTIK_ALLOW_WRITES=TRUE` enables writes.
+
+### Features
+
+* log at info by default and record each write in one line ([0c26f95](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/0c26f95fe9dbf53d2e859906d5824038845d9f1e))
+* require confirm: true on restore_backup ([917d89c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/917d89c493fe652ed4147937fc8e3bceaabd9ada))
+* verify the router's TLS certificate by default ([1267eca](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/1267eca34932a4b79973f613bafc91f38e41cb8a))
+
+
+### Bug Fixes
+
+* get_logs returns the most recent entries, not the oldest ([02c202f](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/02c202fcb97190ed3160ff160c4a93edd54745ac))
+* parse boolean and port env variables strictly ([4b77c2d](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/4b77c2d20ba5284d5e558f1770d44ca59df2ffaa))
+* parse RouterOS .id values before they reach the URL path ([a14e420](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/a14e420b1e95d21cac60f5551e9e6776270b1976))
+* pass FTP credentials to curl on stdin, not argv ([c1e0dd9](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/c1e0dd90e0a1891f89631ded50073ee89fdae0a7))
+* report RouterOS refusals with status, message and detail ([294bbfa](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/294bbfa1d9aa4a82941ab8505a5a6238e56d1517))
+
+
+### Documentation
+
+* drop the unread API token, require Rust 1.88, allow #[expect] ([7365fe3](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/7365fe3b72d16c4efb10f149708831ca20442d20))
+* list every breaking change in the README upgrade notes ([1f0fd87](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/1f0fd879c4bc7d4eb704d2b1da067a4e3b3363f9))
+* prose sweep of AGENTS.md and README.md ([b0cf7a3](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/b0cf7a3df7907e236f7cf1c46710e2add998601f))
+* prose sweep of AGENTS.md and README.md ([96b85d4](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/96b85d4dc860b249f2a450f503a5b95bcb2df29e))
+
 ## [0.6.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.5.0...v0.6.0) (2026-10-19)
 
 
