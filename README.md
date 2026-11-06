@@ -39,35 +39,22 @@ This places `mikrotik-mcp` in `~/.cargo/bin/`.
 
 ## Configuration
 
-The server authenticates to RouterOS using **either** a username/password pair
-**or** an API token. Provide credentials through environment variables and never
+The server authenticates to the RouterOS REST API with a username and
+password (HTTP Basic auth). Provide them through environment variables and never
 commit them.
 
 ### Required
 
 | Variable | Description |
 |----------|-------------|
-| `MIKROTIK_HOST` | RouterOS host, e.g. `192.168.88.1` or `router.lan:8728` |
-
-### Auth option A: user + password
-
-| Variable | Description |
-|----------|-------------|
-| `MIKROTIK_USER` | RouterOS username |
+| `MIKROTIK_HOST` | RouterOS host, e.g. `192.168.88.1` or `router.lan`, no port |
 | `MIKROTIK_PASSWORD` | RouterOS password |
-
-### Auth option B: API token
-
-| Variable | Description |
-|----------|-------------|
-| `MIKROTIK_API_TOKEN` | RouterOS REST API token |
-
-If both are set, the API token takes precedence.
 
 ### Optional
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `MIKROTIK_USER` | `admin` | RouterOS username |
 | `MIKROTIK_SCHEME` | `https` | `https`, or `http` (cleartext, see [TLS](#tls)) |
 | `MIKROTIK_PORT` | `443` (`80` with `http`) | RouterOS REST API port |
 | `MIKROTIK_CA_FILE` | — | PEM CA to verify the router against ([TLS](#tls)) |
@@ -195,7 +182,9 @@ Register the server and pass secrets via the `env` field:
       "command": "mikrotik-mcp",
       "env": {
         "MIKROTIK_HOST": "192.168.88.1",
-        "MIKROTIK_API_TOKEN": "..."
+        "MIKROTIK_USER": "mcp",
+        "MIKROTIK_PASSWORD": "...",
+        "MIKROTIK_CA_FILE": "/abs/path/to/router-ca.pem"
       }
     }
   }
@@ -207,7 +196,9 @@ Or via the Claude Code CLI:
 ```sh
 claude mcp add mikrotik mikrotik-mcp \
   -e MIKROTIK_HOST=192.168.88.1 \
-  -e MIKROTIK_API_TOKEN=...
+  -e MIKROTIK_USER=mcp \
+  -e MIKROTIK_PASSWORD=... \
+  -e MIKROTIK_CA_FILE=/abs/path/to/router-ca.pem
 ```
 
 #### Running from a cargo checkout
@@ -229,7 +220,9 @@ the source tree:
       ],
       "env": {
         "MIKROTIK_HOST": "192.168.88.1",
-        "MIKROTIK_API_TOKEN": "..."
+        "MIKROTIK_USER": "mcp",
+        "MIKROTIK_PASSWORD": "...",
+        "MIKROTIK_CA_FILE": "/abs/path/to/router-ca.pem"
       }
     }
   }
@@ -242,7 +235,9 @@ protocol). The CLI equivalent:
 ```sh
 claude mcp add mikrotik cargo \
   -e MIKROTIK_HOST=192.168.88.1 \
-  -e MIKROTIK_API_TOKEN=... \
+  -e MIKROTIK_USER=mcp \
+  -e MIKROTIK_PASSWORD=... \
+  -e MIKROTIK_CA_FILE=/abs/path/to/router-ca.pem \
   -- run --quiet --release --manifest-path /abs/path/to/mikrotik-mcp/Cargo.toml
 ```
 
