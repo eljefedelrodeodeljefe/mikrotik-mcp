@@ -24,7 +24,7 @@ pub async fn monitor_wifi_interface(
     p: &WifiMonitorParams,
 ) -> anyhow::Result<Value> {
     client
-        .post(
+        .post_read(
             "interface/wifi/monitor",
             &json!({"numbers": p.interface, "once": ""}),
         )
@@ -142,7 +142,9 @@ mod tests {
             .await;
 
         let client = RouterosClient::for_test(&server.uri());
-        let p = ProvisionWifiRadioParams { id: "*5".into() };
+        let p = ProvisionWifiRadioParams {
+            id: crate::params::RouterOsId::try_from("*5").unwrap(),
+        };
         provision_wifi_radio(&client, &p).await.unwrap();
     }
 
@@ -161,7 +163,7 @@ mod tests {
 
         let client = RouterosClient::for_test(&server.uri());
         let p = SetCapsmanChannelParams {
-            id: "*1".into(),
+            id: crate::params::RouterOsId::try_from("*1").unwrap(),
             frequency: Some("2412".into()),
             extension_channel: None,
         };
@@ -173,7 +175,7 @@ mod tests {
     async fn set_capsman_channel_rejects_empty_update() {
         let client = RouterosClient::for_test("http://127.0.0.1:9");
         let p = SetCapsmanChannelParams {
-            id: "*1".into(),
+            id: crate::params::RouterOsId::try_from("*1").unwrap(),
             frequency: None,
             extension_channel: None,
         };

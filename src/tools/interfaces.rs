@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
+use crate::params::RouterOsId;
 use crate::params::{AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams};
 
 pub async fn list_interfaces(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -52,7 +53,10 @@ pub async fn add_interface_list_member(
         .await
 }
 
-pub async fn remove_interface_list_member(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_interface_list_member(
+    client: &RouterosClient,
+    id: &RouterOsId,
+) -> anyhow::Result<()> {
     client.delete("interface/list/member", id).await
 }
 

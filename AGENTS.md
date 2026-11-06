@@ -7,7 +7,7 @@ this repo. Human contributors: see `README.md`.
 
 MCP (Model Context Protocol) server for MikroTik RouterOS. Stdio transport
 via [`rmcp`](https://crates.io/crates/rmcp); REST client via `reqwest`.
-Rust 2024 edition (requires Rust 1.85+).
+Rust 2024 edition (requires Rust 1.88+, for let-chains).
 
 ## Layout
 
@@ -15,11 +15,12 @@ Rust 2024 edition (requires Rust 1.85+).
 src/
 ├── main.rs          # binary entry point, stdio transport wiring, hot-reload watcher
 ├── server.rs        # thin MCP adapter — one #[tool] stub per tool, write gate
+├── config.rs        # MIKROTIK_* env parsing, TLS and scheme settings
 ├── client.rs        # RouterOS REST client (reqwest + rustls)
-├── error.rs         # error helpers
+├── error.rs         # maps tool errors to MCP error codes
 ├── params/          # serde/schemars input structs, one file per domain
 │   ├── mod.rs
-│   ├── shared.rs    # RemoveByIdParams (used by every remove_ tool)
+│   ├── shared.rs    # RouterOsId, RemoveByIdParams (used by every remove_ tool)
 │   ├── system.rs
 │   ├── interfaces.rs
 │   ├── ip.rs
@@ -45,7 +46,9 @@ src/
    and any params and returns `anyhow::Result<Value>`. Add a wiremock test.
 3. Add a short `#[tool(description = "…")]` stub in the matching `impl`
    block in `src/server.rs`. Call `self.guard_write()?` first for any
-   mutating tool.
+   mutating tool. A read-only tool's name starts with `get_`, `list_` or
+   `monitor_`; the write-gate test treats every other tool as mutating and
+   fails if it runs while writes are off.
 
 ## Build / run
 
@@ -57,9 +60,17 @@ cargo build --release    # release binary at target/release/mikrotik-mcp
 
 The server reads RouterOS connection settings from env:
 
-- `MIKROTIK_HOST` (required)
-- `MIKROTIK_USER` + `MIKROTIK_PASSWORD` (option A)
-- `MIKROTIK_API_TOKEN` (option B, takes precedence)
+- `MIKROTIK_HOST` and `MIKROTIK_PASSWORD` (required)
+- `MIKROTIK_USER` (default `admin`)
+
+Auth is HTTP Basic with that user and password. There is no API-token
+option; RouterOS REST doesn't offer one.
+
+TLS verification is on by default. `MIKROTIK_CA_FILE` pins the router's
+certificate; `MIKROTIK_TLS_INSECURE=true` and `MIKROTIK_SCHEME=http` are
+explicit opt-ins that warn at startup. Don't add a code path that turns
+verification off or picks http on its own. `src/config.rs` owns all env
+parsing, and boolean variables go through `parse_bool_env`.
 
 When iterating, run `bacon` in a second terminal. The server detects binary
 mtime changes and exits, and the MCP client auto-restarts it. See `bacon.toml`.
@@ -77,7 +88,11 @@ Hooks: trailing-whitespace, end-of-file, check-toml/yaml, merge-conflict,
 large-files, typos, editorconfig-checker, markdownlint-cli2, `cargo fmt
 --check`, `cargo clippy --all-targets -- -D warnings`.
 
-Clippy is set to deny warnings. Fix each lint; don't silence it with `#[allow]`.
+Clippy is set to deny warnings. Fix the lint where you can. Where a lint is
+wrong for one specific site, put `#[expect(clippy::<lint>, reason = "…")]` on
+that site; unlike `allow`, `expect` fails once the lint stops firing. A bare
+`#[allow]` is still refused. A crate-wide allow goes in the `[lints]` table of
+`Cargo.toml`, with a comment saying why.
 Spell checking is [`typos`][typos] (Rust), which flags only *known misspellings*,
 so RouterOS menu paths, crate names and domain vocabulary need no dictionary
 entries. For a false positive, add the word to `_typos.toml` under
@@ -236,7 +251,8 @@ work around it.
 
 Read current state before proposing any write. Confirm with the user before
 `remove_*` calls. Ask for explicit confirmation before every `restore_backup`
-call, because the device reboots.
+call, because the device reboots. The tool refuses to run without
+`confirm: true`; set it only after the user has said yes to that restore.
 
 ## Things to avoid
 
@@ -245,6 +261,7 @@ call, because the device reboots.
 - Don't add dependencies casually; this is a small surface. Justify in the
   commit message.
 - Don't touch `Cargo.lock` by hand; let cargo manage it.
-- Don't disable lints to make CI pass.
+- Don't silence a lint to make CI pass. The `#[expect]` rule under
+  **Before committing** is the only per-site exception.
 - Don't add AI attribution to commits. No `Co-Authored-By` trailers for AI
   tools. Commits are authored by the human who reviews and accepts the change.

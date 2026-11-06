@@ -32,7 +32,9 @@ pub async fn get_logs(client: &RouterosClient, p: &GetLogsParams) -> anyhow::Res
                 .is_some_and(|t| t.contains(topic.as_str()))
         });
     }
-    entries.truncate(p.count.unwrap_or(50) as usize);
+    // RouterOS returns the log oldest first; keep the most recent `count`.
+    let count = p.count.unwrap_or(50) as usize;
+    entries.drain(..entries.len().saturating_sub(count));
     Ok(Value::Array(entries))
 }
 
@@ -281,7 +283,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_logs_truncates_to_count() {
+    async fn get_logs_keeps_the_most_recent_count() {
         let entries: Vec<_> = (0..60u32).map(|i| json!({"n": i})).collect();
         let server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -296,6 +298,9 @@ mod tests {
             count: Some(10),
         };
         let result = get_logs(&client, &p).await.unwrap();
-        assert_eq!(result.as_array().unwrap().len(), 10);
+        let arr = result.as_array().unwrap();
+        assert_eq!(arr.len(), 10);
+        assert_eq!(arr[0]["n"], 50, "should keep the most recent entries");
+        assert_eq!(arr[9]["n"], 59);
     }
 }

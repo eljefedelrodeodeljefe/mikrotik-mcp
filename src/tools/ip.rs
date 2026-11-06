@@ -2,6 +2,7 @@ use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
 use crate::params::AddIpAddressParams;
+use crate::params::RouterOsId;
 
 pub async fn list_addresses(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/address").await
@@ -23,7 +24,7 @@ pub async fn list_pools(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("ip/pool").await
 }
 
-pub async fn remove_address(client: &RouterosClient, id: &str) -> anyhow::Result<()> {
+pub async fn remove_address(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
     client.delete("ip/address", id).await
 }
 

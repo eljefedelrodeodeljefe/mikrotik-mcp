@@ -39,37 +39,27 @@ This places `mikrotik-mcp` in `~/.cargo/bin/`.
 
 ## Configuration
 
-The server authenticates to RouterOS using **either** a username/password pair
-**or** an API token. Provide credentials through environment variables and never
+The server authenticates to the RouterOS REST API with a username and
+password (HTTP Basic auth). Provide them through environment variables and never
 commit them.
 
 ### Required
 
 | Variable | Description |
 |----------|-------------|
-| `MIKROTIK_HOST` | RouterOS host, e.g. `192.168.88.1` or `router.lan:8728` |
-
-### Auth option A: user + password
-
-| Variable | Description |
-|----------|-------------|
-| `MIKROTIK_USER` | RouterOS username |
+| `MIKROTIK_HOST` | RouterOS host, e.g. `192.168.88.1` or `router.lan`, no port |
 | `MIKROTIK_PASSWORD` | RouterOS password |
-
-### Auth option B: API token
-
-| Variable | Description |
-|----------|-------------|
-| `MIKROTIK_API_TOKEN` | RouterOS REST API token |
-
-If both are set, the API token takes precedence.
 
 ### Optional
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MIKROTIK_PORT` | `443` | RouterOS REST API port |
-| `MIKROTIK_TLS_VERIFY` | `false` | Verify TLS certificate (`true`/`false`) |
+| `MIKROTIK_USER` | `admin` | RouterOS username |
+| `MIKROTIK_SCHEME` | `https` | `https`, or `http` (cleartext, see [TLS](#tls)) |
+| `MIKROTIK_PORT` | `443` (`80` with `http`) | RouterOS REST API port |
+| `MIKROTIK_CA_FILE` | — | PEM CA to verify the router against ([TLS](#tls)) |
+| `MIKROTIK_TLS_INSECURE` | `false` | Accept any certificate (warns) |
+| `MIKROTIK_TLS_VERIFY` | — | **Deprecated** inverse of `…_TLS_INSECURE` |
 | `MIKROTIK_BACKUP_ENCRYPT` | `true` | Encrypt backups with `MIKROTIK_PASSWORD` |
 | `MIKROTIK_ALLOW_WRITES` | `false` | Enable mutating tools |
 | `MIKROTIK_BACKUP_SFTP_HOST` | — | Push backups here via SFTP (see [Backups](#backups)); enables SFTP export when set |
@@ -78,8 +68,57 @@ If both are set, the API token takes precedence.
 | `MIKROTIK_BACKUP_SFTP_PASSWORD` | — | SFTP password (required with `…_HOST`) |
 | `MIKROTIK_BACKUP_SFTP_PATH` | — | Remote directory (default: login home dir) |
 
-The client picks HTTP for port 80 and HTTPS otherwise. If the device has
-only `www` (plain HTTP) enabled and no `www-ssl`, set `MIKROTIK_PORT=80`.
+Boolean variables take `true`/`false`, `1`/`0` or `yes`/`no`, in any case.
+Any other value, or a port that is not a number, stops the server at startup
+with an error naming the variable.
+
+## TLS
+
+Every request carries the RouterOS user and password (HTTP Basic auth), so
+the server verifies the router's certificate by default. A RouterOS device
+usually serves a certificate no public CA signed, so point
+`MIKROTIK_CA_FILE` at a PEM file holding the CA that signed the router's
+`www-ssl` certificate. Only the certificates in that file are trusted then,
+which pins the router. The certificate must name the address in
+`MIKROTIK_HOST` (for an IP, an `IP:` subject-alt-name).
+
+One way to set this up on the router:
+
+```routeros
+/certificate add name=local-ca common-name=local-ca \
+  key-usage=key-cert-sign,crl-sign
+/certificate sign local-ca
+/certificate add name=www common-name=192.168.88.1 \
+  subject-alt-name=IP:192.168.88.1 key-usage=tls-server
+/certificate sign www ca=local-ca
+/ip service set www-ssl certificate=www
+/certificate export-certificate local-ca
+```
+
+Then download `cert_export_local-ca.crt` from **Files** and set
+`MIKROTIK_CA_FILE` to it. A self-signed certificate can go in the file
+directly as long as it is not marked as a CA: rustls refuses a CA
+certificate presented as the server's own (`CaUsedAsEndEntity`).
+
+`MIKROTIK_TLS_INSECURE=true` turns verification off. Anyone on the path can
+then impersonate the router and collect its password, so the server logs a
+warning on every start. `MIKROTIK_TLS_VERIFY` is the old name for the inverse
+setting; it still works and logs a deprecation warning.
+
+`MIKROTIK_SCHEME=http` talks to the plain `www` service and sends the password
+in cleartext. It must be set explicitly: `MIKROTIK_PORT=80` on its own is
+refused rather than quietly downgraded to http.
+
+### Upgrading from 0.x
+
+- Verification used to be off by default. A config that set neither variable
+  now fails the TLS handshake against a router with a self-signed
+  certificate. Set `MIKROTIK_CA_FILE` (preferred), or
+  `MIKROTIK_TLS_INSECURE=true` to keep the old behaviour.
+- A config with `MIKROTIK_PORT=80` needs `MIKROTIK_SCHEME=http` added.
+- Boolean and port variables are parsed strictly: an unrecognised value stops
+  the server at startup, and `TRUE`/`False` now mean what they say.
+- `restore_backup` needs `confirm: true` in the call.
 
 ## Backups
 
@@ -98,7 +137,14 @@ one of two ways:
   credentials in cleartext. Avoid it on hardened or management-locked routers.
 
 `restore_backup` still uploads over FTP; SFTP-based restore is not
-implemented yet.
+implemented yet. It reboots the device, so it refuses to run unless the call
+carries `confirm: true`.
+
+**FTP is insecure.** It sends `MIKROTIK_USER` and `MIKROTIK_PASSWORD`, and the
+backup file, unencrypted over the network, so anyone on the path can read the
+router's admin password. Locally, the server hands the credentials to `curl`
+on its stdin (`curl --config -`), never on the command line, so other users on
+the machine can't read them through `ps`.
 
 ## The write gate is a convenience guard
 
@@ -139,7 +185,9 @@ Register the server and pass secrets via the `env` field:
       "command": "mikrotik-mcp",
       "env": {
         "MIKROTIK_HOST": "192.168.88.1",
-        "MIKROTIK_API_TOKEN": "..."
+        "MIKROTIK_USER": "mcp",
+        "MIKROTIK_PASSWORD": "...",
+        "MIKROTIK_CA_FILE": "/abs/path/to/router-ca.pem"
       }
     }
   }
@@ -151,7 +199,9 @@ Or via the Claude Code CLI:
 ```sh
 claude mcp add mikrotik mikrotik-mcp \
   -e MIKROTIK_HOST=192.168.88.1 \
-  -e MIKROTIK_API_TOKEN=...
+  -e MIKROTIK_USER=mcp \
+  -e MIKROTIK_PASSWORD=... \
+  -e MIKROTIK_CA_FILE=/abs/path/to/router-ca.pem
 ```
 
 #### Running from a cargo checkout
@@ -173,7 +223,9 @@ the source tree:
       ],
       "env": {
         "MIKROTIK_HOST": "192.168.88.1",
-        "MIKROTIK_API_TOKEN": "..."
+        "MIKROTIK_USER": "mcp",
+        "MIKROTIK_PASSWORD": "...",
+        "MIKROTIK_CA_FILE": "/abs/path/to/router-ca.pem"
       }
     }
   }
@@ -186,7 +238,9 @@ protocol). The CLI equivalent:
 ```sh
 claude mcp add mikrotik cargo \
   -e MIKROTIK_HOST=192.168.88.1 \
-  -e MIKROTIK_API_TOKEN=... \
+  -e MIKROTIK_USER=mcp \
+  -e MIKROTIK_PASSWORD=... \
+  -e MIKROTIK_CA_FILE=/abs/path/to/router-ca.pem \
   -- run --quiet --release --manifest-path /abs/path/to/mikrotik-mcp/Cargo.toml
 ```
 

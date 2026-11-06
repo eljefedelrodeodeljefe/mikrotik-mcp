@@ -1,13 +1,18 @@
-use anyhow::Context;
 use rmcp::{
-    ServerHandler,
-    handler::server::wrapper::Parameters,
-    model::{CallToolResult, Content, ErrorCode, ErrorData, ServerCapabilities, ServerInfo},
+    RoleServer, ServerHandler,
+    handler::server::{tool::ToolCallContext, wrapper::Parameters},
+    model::{
+        CallToolRequestParams, CallToolResult, Content, ErrorCode, ErrorData, ServerCapabilities,
+        ServerInfo,
+    },
+    service::RequestContext,
     tool, tool_handler, tool_router,
 };
 use serde_json::Value;
+use tracing::Instrument;
 
 use crate::client::{RouterosClient, SftpTarget};
+use crate::config::Config;
 use crate::error::tool_error;
 use crate::params::*;
 use crate::tools;
@@ -22,49 +27,26 @@ pub struct MikrotikServer {
 
 impl MikrotikServer {
     pub fn from_env() -> anyhow::Result<Self> {
-        let host = std::env::var("MIKROTIK_HOST").context("MIKROTIK_HOST not set")?;
-        let port: u16 = std::env::var("MIKROTIK_PORT")
-            .unwrap_or_else(|_| "443".into())
-            .parse()
-            .context("MIKROTIK_PORT must be a valid port number")?;
-        let username = std::env::var("MIKROTIK_USER").unwrap_or_else(|_| "admin".into());
-        let password = std::env::var("MIKROTIK_PASSWORD").context("MIKROTIK_PASSWORD not set")?;
-        let tls_verify = std::env::var("MIKROTIK_TLS_VERIFY")
-            .map(|v| !matches!(v.as_str(), "false" | "0" | "no"))
-            .unwrap_or(false);
-        let backup_encrypt = std::env::var("MIKROTIK_BACKUP_ENCRYPT")
-            .map(|v| !matches!(v.as_str(), "false" | "0" | "no"))
-            .unwrap_or(true);
-        let writes_enabled = std::env::var("MIKROTIK_ALLOW_WRITES")
-            .map(|v| matches!(v.as_str(), "true" | "1" | "yes"))
-            .unwrap_or(false);
+        Self::from_config(Config::from_env()?)
+    }
 
-        // Optional headless backup export: when a destination host is set, the
-        // router pushes each backup out over SFTP (egress only), which works
-        // even on a hardened device with inbound FTP disabled.
-        let backup_export = match std::env::var("MIKROTIK_BACKUP_SFTP_HOST") {
-            Ok(h) if !h.trim().is_empty() => Some(SftpTarget {
-                host: h,
-                port: std::env::var("MIKROTIK_BACKUP_SFTP_PORT")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(22),
-                user: std::env::var("MIKROTIK_BACKUP_SFTP_USER")
-                    .context("MIKROTIK_BACKUP_SFTP_USER not set (required with MIKROTIK_BACKUP_SFTP_HOST)")?,
-                password: std::env::var("MIKROTIK_BACKUP_SFTP_PASSWORD").context(
-                    "MIKROTIK_BACKUP_SFTP_PASSWORD not set (required with MIKROTIK_BACKUP_SFTP_HOST)",
-                )?,
-                path: std::env::var("MIKROTIK_BACKUP_SFTP_PATH").unwrap_or_default(),
-            }),
-            _ => None,
-        };
-
+    pub fn from_config(c: Config) -> anyhow::Result<Self> {
+        for w in &c.warnings {
+            tracing::warn!("{w}");
+        }
         Ok(Self {
-            client: RouterosClient::new(&host, port, &username, &password, tls_verify)?,
-            password,
-            backup_encrypt,
-            writes_enabled,
-            backup_export,
+            client: RouterosClient::new(
+                &c.host,
+                c.scheme,
+                c.port,
+                &c.username,
+                &c.password,
+                &c.tls,
+            )?,
+            password: c.password,
+            backup_encrypt: c.backup_encrypt,
+            writes_enabled: c.writes_enabled,
+            backup_export: c.backup_export,
         })
     }
 
@@ -170,13 +152,21 @@ impl MikrotikServer {
     }
 
     #[tool(
-        description = "Upload a local .backup file to the device and load it. Decrypted with MIKROTIK_PASSWORD by default. WARNING: device will reboot after restore."
+        description = "Upload a local .backup file to the device and load it. Decrypted with MIKROTIK_PASSWORD by default. WARNING: device will reboot after restore. Requires confirm=true, set only after the user has approved this restore."
     )]
     async fn restore_backup(
         &self,
         Parameters(p): Parameters<RestoreBackupParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
+        if !p.confirm {
+            return Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                "restore_backup reboots the device and replaces its configuration: ask the user, \
+                    then call again with confirm=true",
+                None,
+            ));
+        }
         let msg =
             tools::system::restore_backup(&self.client, &p, &self.password, self.backup_encrypt)
                 .await
@@ -515,7 +505,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<DhcpLeaseIdParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::dhcp::make_lease_static(&self.client, &p.id)
             .await
             .map_err(tool_error)?;
@@ -530,7 +519,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<SetDhcpLeaseParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::dhcp::set_lease(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -764,7 +752,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<SetCapsmanChannelParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::wifi::set_capsman_channel(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -857,7 +844,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<ProvisionWifiRadioParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::wifi::provision_wifi_radio(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -993,7 +979,6 @@ impl MikrotikServer {
         Parameters(p): Parameters<SetSmbUserParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
-        Self::require_field(&p.id, "id")?;
         let data = tools::smb::set_user(&self.client, &p)
             .await
             .map_err(tool_error)?;
@@ -1015,12 +1000,262 @@ impl MikrotikServer {
 
 #[tool_handler]
 impl ServerHandler for MikrotikServer {
+    /// Runs each tool inside a `tool` span, so the client's write log line
+    /// names the tool that made the request.
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let span = tracing::info_span!("tool", name = %request.name);
+        let tcc = ToolCallContext::new(self, request, context);
+        Self::tool_router().call(tcc).instrument(span).await
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "MikroTik RouterOS management via REST API (RouterOS 7.1+). \
                 Configure with MIKROTIK_HOST, MIKROTIK_USER, MIKROTIK_PASSWORD env vars. \
-                Optional: MIKROTIK_PORT (default 443), MIKROTIK_TLS_VERIFY (default false), \
+                Optional: MIKROTIK_PORT (default 443), MIKROTIK_CA_FILE (PEM CA or router \
+                certificate to verify against), MIKROTIK_TLS_INSECURE (default false), \
                 MIKROTIK_ALLOW_WRITES (default false — must be 'true' to enable mutating tools).",
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::model::{CallToolRequestParams, JsonObject, Tool};
+    use rmcp::service::{RoleClient, RunningService, ServiceError};
+    use rmcp::{ServiceExt, model::ErrorCode};
+    use serde_json::json;
+    use wiremock::MockServer;
+
+    /// A tool is read-only only if its name says so. Everything else counts as
+    /// mutating, so a new tool that forgets `guard_write()` fails
+    /// `every_mutating_tool_is_refused_while_writes_are_off` unless it is
+    /// named, and reviewed, as a read.
+    const READ_ONLY_PREFIXES: &[&str] = &["get_", "list_", "monitor_"];
+
+    fn is_read_only(name: &str) -> bool {
+        READ_ONLY_PREFIXES.iter().any(|p| name.starts_with(p))
+    }
+
+    fn server(writes_enabled: bool, router: &MockServer) -> MikrotikServer {
+        MikrotikServer {
+            client: RouterosClient::for_test(&router.uri()),
+            password: "pw".into(),
+            backup_encrypt: true,
+            writes_enabled,
+            backup_export: None,
+        }
+    }
+
+    /// Connects an MCP client to `server` over an in-process pipe.
+    async fn connect(server: MikrotikServer) -> RunningService<RoleClient, ()> {
+        let (server_io, client_io) = tokio::io::duplex(1 << 16);
+        tokio::spawn(async move {
+            if let Ok(running) = server.serve(server_io).await {
+                let _ = running.waiting().await;
+            }
+        });
+        ().serve(client_io).await.expect("MCP handshake")
+    }
+
+    /// Arguments that satisfy `tool`'s input schema: every required property
+    /// gets a value of its type. `*1` is both a valid string and a valid id.
+    fn sample_args(tool: &Tool) -> JsonObject {
+        let schema = tool.input_schema.as_ref();
+        let required: Vec<&str> = schema
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|r| r.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let props = schema.get("properties").and_then(Value::as_object);
+        required
+            .into_iter()
+            .map(|name| {
+                let ty = props
+                    .and_then(|p| p.get(name))
+                    .and_then(|p| p.get("type"))
+                    .and_then(Value::as_str);
+                let value = match ty {
+                    Some("boolean") => json!(true),
+                    Some("integer" | "number") => json!(1),
+                    _ => json!("*1"),
+                };
+                (name.to_string(), value)
+            })
+            .collect()
+    }
+
+    async fn call(
+        client: &RunningService<RoleClient, ()>,
+        name: &str,
+        args: JsonObject,
+    ) -> Result<CallToolResult, ErrorData> {
+        let req = CallToolRequestParams::new(name.to_string()).with_arguments(args);
+        match client.call_tool(req).await {
+            Ok(r) => Ok(r),
+            Err(ServiceError::McpError(e)) => Err(e),
+            Err(e) => panic!("{name}: transport error {e}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn every_mutating_tool_is_refused_while_writes_are_off() {
+        let router = MockServer::start().await;
+        let client = connect(server(false, &router)).await;
+        let tools = client.list_all_tools().await.unwrap();
+
+        let mutating: Vec<&Tool> = tools.iter().filter(|t| !is_read_only(&t.name)).collect();
+        assert!(
+            mutating.len() > 30,
+            "only {} mutating tools found",
+            mutating.len()
+        );
+        for tool in mutating {
+            let err = call(&client, &tool.name, sample_args(tool))
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("{} ran with writes disabled", tool.name));
+            assert_eq!(
+                err.code,
+                ErrorCode::INVALID_REQUEST,
+                "{}: {err:?}",
+                tool.name
+            );
+            assert!(
+                err.message.contains("MIKROTIK_ALLOW_WRITES"),
+                "{}: {}",
+                tool.name,
+                err.message
+            );
+        }
+        let reached = router.received_requests().await.unwrap();
+        assert!(
+            reached.is_empty(),
+            "requests reached the router: {reached:?}"
+        );
+        client.cancel().await.unwrap();
+    }
+
+    /// Collects formatted log output in memory.
+    #[derive(Clone, Default)]
+    struct Capture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Capture {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Capture {
+        fn text(&self) -> String {
+            String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+        }
+    }
+
+    /// The test binary's log output. A global subscriber, set once: a scoped
+    /// one (`set_default`) races with tests on other threads that register
+    /// the same callsites and can miss events. Lines from every test land
+    /// here, so assertions look for values only their own test uses.
+    fn captured_logs() -> &'static Capture {
+        static LOGS: std::sync::OnceLock<Capture> = std::sync::OnceLock::new();
+        LOGS.get_or_init(|| {
+            let logs = Capture::default();
+            let sink = logs.clone();
+            tracing_subscriber::fmt()
+                .with_ansi(false)
+                .with_max_level(tracing::Level::INFO)
+                .with_writer(move || sink.clone())
+                .init();
+            logs
+        })
+    }
+
+    #[tokio::test]
+    async fn each_write_logs_tool_menu_path_and_id_but_no_secret() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, ResponseTemplate};
+
+        let logs = captured_logs();
+        let router = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&router)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({".id": "*9"})))
+            .mount(&router)
+            .await;
+        let client = connect(server(true, &router)).await;
+        let args = |v: Value| v.as_object().unwrap().clone();
+        call(&client, "remove_dns_static", args(json!({"id": "*C0FFEE"})))
+            .await
+            .unwrap();
+        call(
+            &client,
+            "add_smb_user",
+            args(json!({"name": "log-test-user", "password": "s3cret-pw"})),
+        )
+        .await
+        .unwrap();
+        client.cancel().await.unwrap();
+
+        let text = logs.text();
+        let line = text
+            .lines()
+            .find(|l| l.contains("RouterOS write") && l.contains("*C0FFEE"))
+            .unwrap_or_else(|| panic!("no write line for the delete:\n{text}"));
+        for want in ["INFO", "remove_dns_static", "DELETE", "ip/dns/static"] {
+            assert!(line.contains(want), "{want:?} missing: {line}");
+        }
+        assert!(
+            text.lines().any(|l| l.contains("RouterOS write")
+                && l.contains("add_smb_user")
+                && l.contains("ip/smb/users")),
+            "no write line for add_smb_user:\n{text}"
+        );
+        assert!(!text.contains("s3cret-pw"), "password logged:\n{text}");
+    }
+
+    #[tokio::test]
+    async fn restore_backup_needs_confirm_true() {
+        let router = MockServer::start().await;
+        let client = connect(server(true, &router)).await;
+        for args in [
+            json!({"input_path": "/tmp/r.backup"}),
+            json!({"input_path": "/tmp/r.backup", "confirm": false}),
+        ] {
+            let err = call(&client, "restore_backup", args.as_object().unwrap().clone())
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, ErrorCode::INVALID_PARAMS, "{args}: {err:?}");
+        }
+        assert!(router.received_requests().await.unwrap().is_empty());
+        client.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn path_traversal_id_is_refused_before_any_request() {
+        let router = MockServer::start().await;
+        let client = connect(server(true, &router)).await;
+        let args = json!({"id": "1/../../../firewall/filter/*5"});
+        let err = call(
+            &client,
+            "remove_dns_static",
+            args.as_object().unwrap().clone(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS, "{err:?}");
+        assert!(router.received_requests().await.unwrap().is_empty());
+        client.cancel().await.unwrap();
     }
 }

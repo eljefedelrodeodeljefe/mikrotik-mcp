@@ -6,7 +6,7 @@ use crate::params::GetLteInfoParams;
 pub async fn get_lte_info(client: &RouterosClient, p: &GetLteInfoParams) -> anyhow::Result<Value> {
     let iface = p.interface.as_deref().unwrap_or("lte1");
     client
-        .post(
+        .post_read(
             "interface/lte/monitor",
             &json!({"numbers": iface, "once": "yes"}),
         )
