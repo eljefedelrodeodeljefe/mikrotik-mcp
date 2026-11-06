@@ -997,3 +997,139 @@ impl ServerHandler for MikrotikServer {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmcp::model::{CallToolRequestParams, JsonObject, Tool};
+    use rmcp::service::{RoleClient, RunningService, ServiceError};
+    use rmcp::{ServiceExt, model::ErrorCode};
+    use serde_json::json;
+    use wiremock::MockServer;
+
+    /// A tool is read-only only if its name says so. Everything else counts as
+    /// mutating, so a new tool that forgets `guard_write()` fails
+    /// `every_mutating_tool_is_refused_while_writes_are_off` unless it is
+    /// named, and reviewed, as a read.
+    const READ_ONLY_PREFIXES: &[&str] = &["get_", "list_", "monitor_"];
+
+    fn is_read_only(name: &str) -> bool {
+        READ_ONLY_PREFIXES.iter().any(|p| name.starts_with(p))
+    }
+
+    fn server(writes_enabled: bool, router: &MockServer) -> MikrotikServer {
+        MikrotikServer {
+            client: RouterosClient::for_test(&router.uri()),
+            password: "pw".into(),
+            backup_encrypt: true,
+            writes_enabled,
+            backup_export: None,
+        }
+    }
+
+    /// Connects an MCP client to `server` over an in-process pipe.
+    async fn connect(server: MikrotikServer) -> RunningService<RoleClient, ()> {
+        let (server_io, client_io) = tokio::io::duplex(1 << 16);
+        tokio::spawn(async move {
+            if let Ok(running) = server.serve(server_io).await {
+                let _ = running.waiting().await;
+            }
+        });
+        ().serve(client_io).await.expect("MCP handshake")
+    }
+
+    /// Arguments that satisfy `tool`'s input schema: every required property
+    /// gets a value of its type. `*1` is both a valid string and a valid id.
+    fn sample_args(tool: &Tool) -> JsonObject {
+        let schema = tool.input_schema.as_ref();
+        let required: Vec<&str> = schema
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|r| r.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let props = schema.get("properties").and_then(Value::as_object);
+        required
+            .into_iter()
+            .map(|name| {
+                let ty = props
+                    .and_then(|p| p.get(name))
+                    .and_then(|p| p.get("type"))
+                    .and_then(Value::as_str);
+                let value = match ty {
+                    Some("boolean") => json!(true),
+                    Some("integer" | "number") => json!(1),
+                    _ => json!("*1"),
+                };
+                (name.to_string(), value)
+            })
+            .collect()
+    }
+
+    async fn call(
+        client: &RunningService<RoleClient, ()>,
+        name: &str,
+        args: JsonObject,
+    ) -> Result<CallToolResult, ErrorData> {
+        let req = CallToolRequestParams::new(name.to_string()).with_arguments(args);
+        match client.call_tool(req).await {
+            Ok(r) => Ok(r),
+            Err(ServiceError::McpError(e)) => Err(e),
+            Err(e) => panic!("{name}: transport error {e}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn every_mutating_tool_is_refused_while_writes_are_off() {
+        let router = MockServer::start().await;
+        let client = connect(server(false, &router)).await;
+        let tools = client.list_all_tools().await.unwrap();
+
+        let mutating: Vec<&Tool> = tools.iter().filter(|t| !is_read_only(&t.name)).collect();
+        assert!(
+            mutating.len() > 30,
+            "only {} mutating tools found",
+            mutating.len()
+        );
+        for tool in mutating {
+            let err = call(&client, &tool.name, sample_args(tool))
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("{} ran with writes disabled", tool.name));
+            assert_eq!(
+                err.code,
+                ErrorCode::INVALID_REQUEST,
+                "{}: {err:?}",
+                tool.name
+            );
+            assert!(
+                err.message.contains("MIKROTIK_ALLOW_WRITES"),
+                "{}: {}",
+                tool.name,
+                err.message
+            );
+        }
+        let reached = router.received_requests().await.unwrap();
+        assert!(
+            reached.is_empty(),
+            "requests reached the router: {reached:?}"
+        );
+        client.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn path_traversal_id_is_refused_before_any_request() {
+        let router = MockServer::start().await;
+        let client = connect(server(true, &router)).await;
+        let args = json!({"id": "1/../../../firewall/filter/*5"});
+        let err = call(
+            &client,
+            "remove_dns_static",
+            args.as_object().unwrap().clone(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS, "{err:?}");
+        assert!(router.received_requests().await.unwrap().is_empty());
+        client.cancel().await.unwrap();
+    }
+}

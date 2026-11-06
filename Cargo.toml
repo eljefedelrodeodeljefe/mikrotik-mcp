@@ -23,4 +23,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
+# The client role, to drive the server over an in-process MCP session in tests.
+rmcp = { version = "1.7", features = ["client"] }
 wiremock = "0.6"
