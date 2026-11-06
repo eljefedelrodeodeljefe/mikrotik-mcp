@@ -1,8 +1,8 @@
 # mikrotik-mcp
 
 > ⚠️ **Experimental.** APIs, tool surface, and config may change without
-> notice. That said, this is **actively used and actively developed** —
-> issues and PRs welcome, breakage will be fixed quickly.
+> notice. The project is **in active use and active development**. Issues and
+> PRs are welcome, and breakage will be fixed quickly.
 
 MCP (Model Context Protocol) server for MikroTik RouterOS. Exposes RouterOS
 operations as MCP tools so AI agents can query and manage MikroTik devices.
@@ -40,7 +40,7 @@ This places `mikrotik-mcp` in `~/.cargo/bin/`.
 ## Configuration
 
 The server authenticates to RouterOS using **either** a username/password pair
-**or** an API token. Provide credentials through environment variables — never
+**or** an API token. Provide credentials through environment variables and never
 commit them.
 
 ### Required
@@ -49,14 +49,14 @@ commit them.
 |----------|-------------|
 | `MIKROTIK_HOST` | RouterOS host, e.g. `192.168.88.1` or `router.lan:8728` |
 
-### Auth — option A: user + password
+### Auth option A: user + password
 
 | Variable | Description |
 |----------|-------------|
 | `MIKROTIK_USER` | RouterOS username |
 | `MIKROTIK_PASSWORD` | RouterOS password |
 
-### Auth — option B: API token
+### Auth option B: API token
 
 | Variable | Description |
 |----------|-------------|
@@ -78,8 +78,8 @@ If both are set, the API token takes precedence.
 | `MIKROTIK_BACKUP_SFTP_PASSWORD` | — | SFTP password (required with `…_HOST`) |
 | `MIKROTIK_BACKUP_SFTP_PATH` | — | Remote directory (default: login home dir) |
 
-The client picks HTTP for port 80 and HTTPS otherwise. If the device only
-has `www` (plain HTTP) enabled rather than `www-ssl`, set `MIKROTIK_PORT=80`.
+The client picks HTTP for port 80 and HTTPS otherwise. If the device has
+only `www` (plain HTTP) enabled and no `www-ssl`, set `MIKROTIK_PORT=80`.
 
 ## Backups
 
@@ -95,13 +95,16 @@ one of two ways:
 - **FTP download (legacy).** With no SFTP host configured, the tool pulls the
   file to the local machine over FTP (port 21) and writes it to `output_path`.
   This requires the FTP service to be **enabled** on the device and sends the
-  credentials in cleartext — avoid it on hardened/management-locked routers.
+  credentials in cleartext. Avoid it on hardened or management-locked routers.
 
-`restore_backup` still uploads over FTP; SFTP-based restore is a follow-up.
+`restore_backup` still uploads over FTP; SFTP-based restore is not
+implemented yet.
 
-`MIKROTIK_ALLOW_WRITES` is a convenience guard — it is not a security
-boundary. For genuine read-only enforcement, use a RouterOS user with
-`policy=read,api,rest-api` and no write policy.
+## The write gate is a convenience guard
+
+`MIKROTIK_ALLOW_WRITES=true` enables the mutating tools. Anyone who can set
+the server's environment can set it. To enforce read-only access, use a
+RouterOS user with `policy=read,api,rest-api` and no write policy.
 
 ## Injecting the secret
 
@@ -246,22 +249,22 @@ Commit prefixes that affect the version:
 Every release ships a Software Bill of Materials, generated with [Syft][syft] and
 attached to the GitHub release as two assets:
 
-- `mikrotik-mcp-<tag>-sbom.cdx.json` — CycloneDX
-- `mikrotik-mcp-<tag>-sbom.spdx.json` — SPDX
+- `mikrotik-mcp-<tag>-sbom.cdx.json`: CycloneDX
+- `mikrotik-mcp-<tag>-sbom.spdx.json`: SPDX
 
 Both formats are published so you can feed the SBOM to whichever tooling you already
-run, rather than betting on one standard. Release assets don't expire, so a given
+run. Release assets don't expire, so a given
 version's SBOM stays retrievable for as long as the release does.
 
-The same SBOM is scanned for known vulnerabilities with [Grype][grype] — weekly,
+The same SBOM is scanned for known vulnerabilities with [Grype][grype], weekly
 and on every release. The weekly run fails on Critical/High findings that have a
 fix available; the release-time run reports only, so a finding can't leave a
 release half-published.
 
-Note the SBOM describes the resolved `Cargo.lock`, which is a **superset** of what
+The SBOM describes the resolved `Cargo.lock`, which is a **superset** of what
 gets compiled: Cargo records optional dependencies of dependencies even when the
 feature that would enable them is off. If you are assessing a finding against this
-crate, check `cargo tree -i <crate>` first — a crate absent from the build graph
+crate, check `cargo tree -i <crate>` first. A crate absent from the build graph
 never reaches the binary.
 
 [syft]: https://github.com/anchore/syft

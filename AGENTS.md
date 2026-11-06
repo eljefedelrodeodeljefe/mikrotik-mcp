@@ -41,8 +41,8 @@ src/
 
 1. Add a param struct to `src/params/{domain}.rs` (derive `Deserialize +
    JsonSchema`).
-2. Add a pure function to `src/tools/{domain}.rs` — takes `&RouterosClient`
-   and any params, returns `anyhow::Result<Value>`. Add a wiremock test.
+2. Add a pure function to `src/tools/{domain}.rs`. It takes `&RouterosClient`
+   and any params and returns `anyhow::Result<Value>`. Add a wiremock test.
 3. Add a short `#[tool(description = "…")]` stub in the matching `impl`
    block in `src/server.rs`. Call `self.guard_write()?` first for any
    mutating tool.
@@ -61,13 +61,13 @@ The server reads RouterOS connection settings from env:
 - `MIKROTIK_USER` + `MIKROTIK_PASSWORD` (option A)
 - `MIKROTIK_API_TOKEN` (option B, takes precedence)
 
-When iterating, run `bacon` in a second terminal — the server detects binary
+When iterating, run `bacon` in a second terminal. The server detects binary
 mtime changes and exits, and the MCP client auto-restarts it. See `bacon.toml`.
 
 ## Before committing
 
-All hooks must pass. Run via [`prek`][prek] (Rust reimplementation of
-pre-commit — **do not use Python `pre-commit` or `uvx pre-commit`**):
+All hooks must pass. Run them with [`prek`][prek], a Rust reimplementation of
+pre-commit. **Do not use Python `pre-commit` or `uvx pre-commit`.**
 
 ```sh
 prek run --all-files
@@ -77,12 +77,11 @@ Hooks: trailing-whitespace, end-of-file, check-toml/yaml, merge-conflict,
 large-files, typos, editorconfig-checker, markdownlint-cli2, `cargo fmt
 --check`, `cargo clippy --all-targets -- -D warnings`.
 
-Clippy is set to deny warnings — fix lints, don't `#[allow]` them away.
-Spell checking is [`typos`][typos] (Rust), which looks for *known misspellings*
-rather than flagging every unrecognised word — so RouterOS menu paths, crate
-names and domain vocabulary need no dictionary entries. On the rare genuine false
-positive, add it to `_typos.toml` under `[default.extend-words]` with a comment
-saying why; don't reach for a blanket exclusion.
+Clippy is set to deny warnings. Fix each lint; don't silence it with `#[allow]`.
+Spell checking is [`typos`][typos] (Rust), which flags only *known misspellings*,
+so RouterOS menu paths, crate names and domain vocabulary need no dictionary
+entries. For a false positive, add the word to `_typos.toml` under
+`[default.extend-words]` with a comment saying why; don't add a blanket exclusion.
 
 [prek]: https://github.com/j178/prek
 [typos]: https://github.com/crate-ci/typos
@@ -90,22 +89,21 @@ saying why; don't reach for a blanket exclusion.
 ## Branch naming
 
 **`main` is the only long-lived branch.** Branch off it, PR back into it.
-There is no `develop` — it was merged into `main` in PR #10 and deleted, and
-every PR since has targeted `main` directly.
+There is no `develop` branch. It was merged into `main` in PR #10 and deleted,
+and every PR since has targeted `main` directly.
 
-- `main` — the trunk. Released code, tagged versions, and the base for all
+- `main`: the trunk. Released code, tagged versions, and the base for all
   work. Merges arrive by PR; release PRs come from release-please.
-- `feat/<short-name>` — new features. Example: `feat/firewall-rules`.
-- `fix/<short-name>` or `bugfix/<short-name>` — bug fixes.
-- `docs/<short-name>`, `chore/<short-name>`, `refactor/<short-name>` — as the
-  name suggests.
+- `feat/<short-name>`: new features. Example: `feat/firewall-rules`.
+- `fix/<short-name>` or `bugfix/<short-name>`: bug fixes.
+- `docs/<short-name>`, `chore/<short-name>`, `refactor/<short-name>`:
+  documentation, chores and refactors.
 
 `feature/<short-name>` also appears in the history and still works; `feat/` is
 what recent branches use. Pick one and stay consistent within a branch.
 
-Use kebab-case slugs (`feat/dhcp-lease-tools`, not `feat/DHCP_Lease_Tools`).
-Keep names short and topic-focused, not ticket-numbered (we don't use issue
-trackers as filenames here).
+Use lowercase kebab-case slugs, such as `feat/dhcp-lease-tools`. Keep names
+short and name the topic; branch names carry no ticket numbers.
 
 ## Commit messages
 
@@ -115,8 +113,7 @@ Conventional commits. The version is cut by release-please from these prefixes:
 - `fix: …`, `perf: …` → patch bump
 - `feat!: …` or `BREAKING CHANGE:` footer → major bump
 - `chore: …`, `ci: …`, `test: …`, `docs: …`, `refactor: …` → no version bump
-  (some appear in the changelog, some are hidden — see
-  `release-please-config.json`)
+  (`release-please-config.json` sets which of them appear in the changelog)
 
 Keep one logical change per commit. Don't squash unrelated edits together.
 
@@ -134,16 +131,16 @@ every PR into `main`, on pushes to `main`, and on pushes to `feat/**`,
 `feature/**`, `fix/**`, `bugfix/**`, `docs/**`, `chore/**` and `refactor/**`.
 All jobs must pass.
 
-A branch prefix that is not in that list still gets CI from its **pull
-request** — only the push-triggered run is skipped. If you add a new prefix
+A branch whose prefix is not in that list gets CI from its **pull request**
+only, with no push-triggered run. If you add a new prefix
 convention, add it to `ci.yml` too.
 
 `.github/workflows/release-please.yml` watches pushes to `main` and maintains
-the release PR. `.github/workflows/release.yml` is separate again: it fires on
-a **published release**, not on pushes, and skips pre-releases.
+the release PR. `.github/workflows/release.yml` fires only on a **published
+release** and skips pre-releases.
 
-`.github/workflows/sbom-scan.yml` generates the SBOM and scans it for CVEs —
-weekly on a schedule (gating), and from `release.yml` at release time
+`.github/workflows/sbom-scan.yml` generates the SBOM and scans it for CVEs. It
+runs weekly on a schedule (gating) and from `release.yml` at release time
 (informational). See **Security scanning** below.
 
 ## Security scanning
@@ -159,21 +156,22 @@ the crate's dependency tree.
 
 A release is never gated: by the time `release.yml` runs the version is already
 published, so failing there would leave a half-shipped release. Critical/High
-findings with **no** fix available are logged, not gated — there is nothing
-actionable to gate on. Medium gets a `::warning::`; Low is logged only.
+findings with **no** fix available are logged and do not fail the run, because
+there is no fix to act on. Medium gets a `::warning::`; Low is logged only.
 
 Two conventions in that workflow differ from the rest of the repo, on purpose:
 
-- **Actions are pinned by commit SHA, not by major tag.** Tags are mutable; a
-  workflow whose job is supply-chain assurance must not depend on a mutable
-  reference. Everything else in `.github/workflows/` pins by tag (`@v7`).
-- **Syft and Grype are installed from checksum-verified release tarballs**, not
-  from a wrapper Action or `curl | sh`. Don't "simplify" either of these.
+- **Actions are pinned by commit SHA.** Tags are mutable, and a workflow whose
+  job is supply-chain assurance must not depend on a mutable reference.
+  Everything else in `.github/workflows/` pins by major tag (`@v7`).
+- **Syft and Grype are installed from checksum-verified release tarballs.**
+  Don't replace either convention with a wrapper Action, a tag pin or
+  `curl | sh`.
 
 When bumping the pinned `SYFT_VERSION` / `GRYPE_VERSION`, keep the checksum
 verification step intact.
 
-**The SBOM is lockfile-scoped, so it is a superset of what actually ships.**
+**The SBOM is lockfile-scoped, so it is a superset of what ships.**
 `syft scan dir:.` reads `Cargo.lock`, and Cargo records optional dependencies of
 dependencies even when the feature that would pull them in is disabled. Before
 treating a finding as real exposure, check whether the crate is built at all:
@@ -183,16 +181,16 @@ cargo tree -i <crate>                 # "nothing to print" => not in the build g
 cargo tree -i <crate> --target all    # check other platforms too
 ```
 
-A crate absent from the build graph is lockfile hygiene, not an exposure — fix it
-if the fix is cheap (`cargo update -p <crate>`, then `cargo test --locked`), but
-don't treat it as an incident. The first finding this scanning produced was
-exactly that case: a High advisory in a QUIC crate reachable only through a
-`reqwest` feature this crate does not enable.
+A crate absent from the build graph is a lockfile hygiene issue with no
+exposure. Fix it if the fix is cheap (`cargo update -p <crate>`, then
+`cargo test --locked`), and don't treat it as an incident. The first finding
+this scanning produced was that case: a High advisory in a QUIC crate
+reachable only through a `reqwest` feature this crate does not enable.
 
-If unbuilt optional dependencies ever get noisy, the fix is to build with
-`cargo auditable` and scan the binary, which embeds the real dependency set.
-Deliberately not done today — it adds a build-time dependency to solve a problem
-this crate does not have.
+If unbuilt optional dependencies get noisy, build with `cargo auditable` and
+scan the binary, which embeds the real dependency set. This is not done today
+because it adds a build-time dependency to solve a problem this crate does not
+have.
 
 The scan covers the crate dependency tree and the GitHub Actions pinned in
 `.github/workflows/` (Syft catalogs those too). It does not cover the Rust
@@ -202,7 +200,7 @@ toolchain, the runner image, or the RouterOS devices this server talks to.
 
 Tool descriptions (the `description = "…"` string in each `#[tool(…)]` attribute)
 must stay close to the language used in the official MikroTik documentation. Use
-the same field names, menu paths, and terminology that RouterOS uses — don't invent
+the same field names, menu paths, and terminology that RouterOS uses. Don't invent
 synonyms or over-explain RouterOS internals.
 
 When adding or updating a tool, look up the relevant wiki page first and mirror
@@ -221,31 +219,32 @@ its terminology. Key references:
 | Routes | <https://help.mikrotik.com/docs/spaces/ROS/pages/328084/IP+Routing> |
 | DNS | <https://help.mikrotik.com/docs/spaces/ROS/pages/24805404/DNS> |
 
-Links were last verified 2026-05-26. Re-check periodically — MikroTik moves pages
-without redirects. Run `curl -sI <url> | grep -i location` to spot moved pages,
-or search [help.mikrotik.com](https://help.mikrotik.com) by topic.
+Links were last verified 2026-05-26. Re-check them periodically, because
+MikroTik moves pages without redirects. Run `curl -sI <url> | grep -i location`
+to spot moved pages, or search [help.mikrotik.com](https://help.mikrotik.com)
+by topic.
 
-## Write gate
+## The write gate is a convenience guard
 
 Mutating tools return `INVALID_REQUEST` unless `MIKROTIK_ALLOW_WRITES=true`
-is set. This is a convenience guard, not a security boundary — real
-enforcement belongs at the RouterOS user level (`policy=read,api,rest-api`).
+is set. Anyone who can set the server's environment can open the gate. Enforce
+read-only access at the RouterOS user level (`policy=read,api,rest-api`).
 
 When a write fails because the gate is closed, tell the user to set
 `MIKROTIK_ALLOW_WRITES=true` in the MCP config env block. Don't retry or
 work around it.
 
 Read current state before proposing any write. Confirm with the user before
-`remove_*` calls. Treat `restore_backup` as requiring explicit confirmation
-every time — the device reboots.
+`remove_*` calls. Ask for explicit confirmation before every `restore_backup`
+call, because the device reboots.
 
 ## Things to avoid
 
-- Don't write to stdout from the server process — stdout is the MCP protocol
-  channel. Use `tracing` (stderr) for diagnostics.
+- Don't write to stdout from the server process. Stdout is the MCP protocol
+  channel; use `tracing` (stderr) for diagnostics.
 - Don't add dependencies casually; this is a small surface. Justify in the
   commit message.
 - Don't touch `Cargo.lock` by hand; let cargo manage it.
 - Don't disable lints to make CI pass.
 - Don't add AI attribution to commits. No `Co-Authored-By` trailers for AI
-  tools — commits are authored by the human who reviews and accepts the change.
+  tools. Commits are authored by the human who reviews and accepts the change.
