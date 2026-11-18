@@ -9,19 +9,34 @@ permissions:
   contents: write
   pull-requests: write
 
-# Cancel superseded runs — release-please is idempotent so dropping a queued
-# run is always safe.
-concurrency:
-  group: release-please-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   release-please:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    # Cancel superseded runs — release-please is idempotent so dropping a queued
+    # run is always safe. Job-level, not workflow-level, so a newer push to main
+    # cannot cancel the release build below mid-upload.
+    concurrency:
+      group: release-please-${{ github.ref }}
+      cancel-in-progress: true
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ github.ref_name }}
+
+  # The release above is created with GITHUB_TOKEN, which does not trigger
+  # release.yml's `release: published`, so call the build directly.
+  release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
