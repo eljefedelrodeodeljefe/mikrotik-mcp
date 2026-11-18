@@ -34,6 +34,11 @@ on:
         type: string
         required: false
         default: ""
+      ref:
+        description: "Git ref to scan (e.g. a release tag). Empty = the triggering ref."
+        type: string
+        required: false
+        default: ""
     outputs:
       finding-count-critical:
         value: ${{ jobs.scan.outputs.finding-count-critical }}
@@ -70,6 +75,8 @@ jobs:
       # deliberate and documented in AGENTS.md.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
 
       # Syft and Grype are installed from pinned, checksum-verified release tarballs rather
       # than a wrapper Action or a curl-pipe-to-sh installer. A scanner that exists to

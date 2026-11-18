@@ -1,24 +1,49 @@
 name: Release
 
+# Builds the release binaries and attaches them, plus the SBOMs, to a GitHub release.
+#
+# Normally called from release-please.yml right after release-please creates the release.
+# That release is made with GITHUB_TOKEN, and GitHub does not start other workflows from
+# events GITHUB_TOKEN causes, so `release: published` never fires for it; the explicit
+# workflow_call is what actually builds a release.
+#
+# `release: published` still covers a release published by hand. workflow_dispatch rebuilds
+# an existing tag (for example, after a runner image is retired): the workflow file comes
+# from the ref you dispatch on, the code from the tag.
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build, e.g. v0.8.0
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)build, e.g. v0.8.0
+        required: true
+        type: string
 
 permissions:
   contents: write
 
-# Never cancel — interrupting mid-upload leaves a half-published release.
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+env:
+  TAG: ${{ inputs.tag || github.event.release.tag_name }}
 
 jobs:
   build:
     name: build / ${{ matrix.target }}
     # Skip pre-releases (tags with a `-` suffix, e.g. 0.2.0-rc.1).
-    if: "!github.event.release.prerelease"
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    # Never cancel — interrupting mid-upload leaves a half-published release. Job-level so it
+    # also holds when this workflow is called from release-please.yml.
+    concurrency:
+      group: release-${{ inputs.tag || github.event.release.tag_name }}-${{ matrix.target }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -27,12 +52,16 @@ jobs:
             os: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
+          # macos-14 is retired ("configuration 'macos-14-arm64-us-default' is not
+          # supported"). macos-15 is Apple silicon; x86_64 is cross-compiled there.
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-15
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -44,22 +73,23 @@ jobs:
         run: |
           mkdir -p dist
           tar -C target/${{ matrix.target }}/release -czf \
-            dist/mikrotik-mcp-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz \
+            "dist/mikrotik-mcp-${TAG}-${{ matrix.target }}.tar.gz" \
             mikrotik-mcp
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.tar.gz --clobber
+        run: gh release upload "$TAG" dist/*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
 
   # SBOM for the released version, attached to the release as a durable asset.
   # Informational: a finding must never block a release that has already been published —
   # the weekly gating scan in sbom-scan.yml is where enforcement lives.
   sbom:
     name: SBOM + vulnerability scan
-    if: "!github.event.release.prerelease"
+    if: github.event_name != 'release' || !github.event.release.prerelease
     uses: ./.github/workflows/sbom-scan.yml
     permissions:
       contents: write
     with:
       mode: informational
-      upload-to-release: ${{ github.event.release.tag_name }}
+      upload-to-release: ${{ inputs.tag || github.event.release.tag_name }}
+      ref: ${{ inputs.tag || github.event.release.tag_name }}
