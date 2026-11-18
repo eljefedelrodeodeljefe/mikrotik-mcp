@@ -151,8 +151,14 @@ only, with no push-triggered run. If you add a new prefix
 convention, add it to `ci.yml` too.
 
 `.github/workflows/release-please.yml` watches pushes to `main` and maintains
-the release PR. `.github/workflows/release.yml` fires only on a **published
-release** and skips pre-releases.
+the release PR. When release-please creates a release, the same workflow calls
+`.github/workflows/release.yml` to build and attach the binaries and SBOMs.
+That call is required: the release is created with `GITHUB_TOKEN`, and GitHub
+does not start other workflows from events `GITHUB_TOKEN` causes, so
+`release: published` never fires for it (v0.7.0 and v0.8.0 shipped without
+binaries because of this). `release.yml` also runs on a release published by
+hand, and from `workflow_dispatch` with a `tag` input to rebuild an existing
+release. Pre-releases are skipped on the `release` event.
 
 `.github/workflows/sbom-scan.yml` generates the SBOM and scans it for CVEs. It
 runs weekly on a schedule (gating) and from `release.yml` at release time
@@ -166,7 +172,7 @@ the crate's dependency tree.
 | Trigger | Mode | Effect |
 | --- | --- | --- |
 | Weekly schedule | **gating** | Fails on Critical/High with a fix |
-| Release published | informational | Attaches SBOMs to the release |
+| Release build (`release.yml`) | informational | Attaches SBOMs to the release |
 | `workflow_dispatch` | your choice | Fails only if you select `gating` |
 
 A release is never gated: by the time `release.yml` runs the version is already
