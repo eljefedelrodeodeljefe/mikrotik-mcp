@@ -8,7 +8,8 @@
 //! installed package.
 //!
 //! `/caps-man/security` is deliberately not exposed — it returns the WPA
-//! passphrase in plaintext.
+//! passphrase in plaintext. A configuration profile can carry the same
+//! properties inline (`security.passphrase`), so its listing is redacted.
 
 use serde_json::Value;
 
@@ -35,7 +36,8 @@ pub async fn list_capsman_registrations(client: &RouterosClient) -> anyhow::Resu
 }
 
 pub async fn list_capsman_configurations(client: &RouterosClient) -> anyhow::Result<Value> {
-    client.get("caps-man/configuration").await
+    let data = client.get("caps-man/configuration").await?;
+    Ok(super::wifi::redact_secrets(data))
 }
 
 pub async fn list_capsman_provisioning(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -169,7 +171,12 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/rest/caps-man/configuration"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-                {".id": "*1", "name": "cfg-2g", "channel": "ch-2g"}
+                {
+                    ".id": "*1",
+                    "name": "cfg-2g",
+                    "channel": "ch-2g",
+                    "security.passphrase": "not-a-real-secret"
+                }
             ])))
             .mount(&server)
             .await;
@@ -177,6 +184,8 @@ mod tests {
         let client = RouterosClient::for_test(&server.uri());
         let result = list_capsman_configurations(&client).await.unwrap();
         assert_eq!(result.as_array().unwrap()[0]["name"], "cfg-2g");
+        assert_eq!(result[0]["security.passphrase-set"], true);
+        assert!(!result.to_string().contains("not-a-real-secret"));
     }
 
     #[tokio::test]

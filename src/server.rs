@@ -699,7 +699,8 @@ impl MikrotikServer {
     #[tool(
         description = "List CAPsMAN configuration profiles from /caps-man/configuration — name, \
             ssid, country, installation, and the channel, datapath and security profiles each \
-            one references"
+            one references. Inline security.passphrase is replaced by a \
+            security.passphrase-set flag"
     )]
     async fn list_capsman_configurations(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::capsman::list_capsman_configurations(&self.client)
