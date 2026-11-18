@@ -675,7 +675,8 @@ impl MikrotikServer {
     #[tool(
         description = "List CAPsMAN interfaces from /caps-man/interface — the capN master and \
             slave interfaces, their configuration, radio-mac, current-channel, current-state, \
-            and registered client counts"
+            and registered client counts. Inline security.passphrase is replaced by a \
+            security.passphrase-set flag"
     )]
     async fn list_capsman_interfaces(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::capsman::list_capsman_interfaces(&self.client)
@@ -699,7 +700,8 @@ impl MikrotikServer {
     #[tool(
         description = "List CAPsMAN configuration profiles from /caps-man/configuration — name, \
             ssid, country, installation, and the channel, datapath and security profiles each \
-            one references"
+            one references. Inline security.passphrase is replaced by a \
+            security.passphrase-set flag"
     )]
     async fn list_capsman_configurations(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::capsman::list_capsman_configurations(&self.client)
@@ -758,12 +760,32 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "Set a CAPsMAN configuration profile in /caps-man/configuration, given by \
+            .id or name — ssid, channel, security, datapath, country, installation, hide-ssid, \
+            comment. Only the given properties are set; a property cannot be unset or cleared \
+            (e.g. detaching a security profile). CAPs using the profile are \
+            re-provisioned and their clients reconnect. Passphrases in the reply are replaced \
+            by a <key>-set flag"
+    )]
+    async fn set_capsman_configuration(
+        &self,
+        Parameters(p): Parameters<SetCapsmanConfigurationParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::wifi::set_capsman_configuration(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     // ── WiFi (/interface/wifi) ────────────────────────────────────────────────
 
     #[tool(
         description = "List WiFi interfaces from /interface/wifi — name, configuration, channel, \
             radio-mac, master-interface, and running/inactive state. Includes the dynamic \
-            CAPsMAN-managed wcapN interfaces on a WiFi CAPsMAN manager"
+            CAPsMAN-managed wcapN interfaces on a WiFi CAPsMAN manager. Inline \
+            security.passphrase is replaced by a security.passphrase-set flag"
     )]
     async fn list_wifi_interfaces(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::wifi::list_wifi_interfaces(&self.client)
@@ -817,6 +839,38 @@ impl MikrotikServer {
     )]
     async fn list_wifi_channels(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::wifi::list_wifi_channels(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List WiFi configuration profiles from /interface/wifi/configuration — \
+            name, mode, ssid, country, installation, and the channel, security and datapath \
+            each one references. Passphrases are not returned: inline security.passphrase is \
+            replaced by a security.passphrase-set flag"
+    )]
+    async fn list_wifi_configurations(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wifi::list_wifi_configurations(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a WiFi configuration profile in /interface/wifi/configuration, given \
+            by .id or name — ssid, channel, security, datapath, country, installation, mode, \
+            hide-ssid, disabled, comment. Only the given properties are set; a property cannot \
+            be unset or cleared (e.g. detaching a security profile). Interfaces using \
+            the profile, including CAPsMAN-provisioned ones, restart and their clients \
+            reconnect. Passphrases in the reply are replaced by a <key>-set flag"
+    )]
+    async fn set_wifi_configuration(
+        &self,
+        Parameters(p): Parameters<SetWifiConfigurationParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::wifi::set_wifi_configuration(&self.client, &p)
             .await
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
