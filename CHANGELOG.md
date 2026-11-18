@@ -5,7 +5,6 @@
 
 ### Features
 
-* list_wifi_configurations, set_wifi_configuration, set_capsman_configuration ([883a863](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/883a863fa4c3c17935eadf8905f0c6cf722f8aa9))
 * list_wifi_configurations, set_wifi_configuration, set_capsman_configuration ([002a0e3](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/002a0e3f2c3d5c1e20e54726d5bc8a035ab86f23))
 
 
