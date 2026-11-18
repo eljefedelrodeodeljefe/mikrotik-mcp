@@ -51,13 +51,15 @@ pub(crate) fn redact_secrets(value: Value) -> Value {
 }
 
 /// Resolves a profile given by `.id` or by `name` to its `.id`. Names never
-/// reach the request path: they are looked up in the menu's listing.
+/// reach the request path: they are looked up in the menu's listing. An empty
+/// name counts as not given.
 async fn resolve_profile_id(
     client: &RouterosClient,
     menu: &str,
     id: Option<&RouterOsId>,
     name: Option<&str>,
 ) -> anyhow::Result<RouterOsId> {
+    let name = name.filter(|n| !n.trim().is_empty());
     match (id, name) {
         (Some(id), None) => Ok(id.clone()),
         (None, Some(name)) => {
@@ -476,6 +478,88 @@ mod tests {
                 .await
                 .is_err()
         );
+        let mut p = wifi_cfg(None, None);
+        p.ssid = Some("ExampleNet".into());
+        assert!(set_wifi_configuration(&client, &p).await.is_err());
+        p.id = Some(RouterOsId::try_from("*1").unwrap());
+        p.name = Some("cfg-5g".into());
+        assert!(set_wifi_configuration(&client, &p).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn empty_name_counts_as_absent() {
+        let server = MockServer::start().await;
+        Mock::given(method("PATCH"))
+            .and(path("/rest/caps-man/configuration/*1"))
+            .and(body_json(json!({"ssid": "ExampleNet"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({".id": "*1"})))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        set_capsman_configuration(&client, &capsman_cfg(Some("*1"), Some("")))
+            .await
+            .unwrap();
+        // An empty name alone is no identifier at all, and must not match a
+        // nameless entry in the listing.
+        assert!(
+            set_capsman_configuration(&client, &capsman_cfg(None, Some("")))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_profile_id_errors_on_entry_without_id() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/interface/wifi/configuration"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {"name": "cfg-5g", "ssid": "ExampleNet"}
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let err = resolve_profile_id(
+            &client,
+            "interface/wifi/configuration",
+            None,
+            Some("cfg-5g"),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("has no .id"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn set_wifi_configuration_by_id_skips_lookup() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .expect(0)
+            .mount(&server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path("/rest/interface/wifi/configuration/*B"))
+            .and(body_json(
+                json!({"ssid": "ExampleNet", "installation": "indoor"}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({".id": "*B", "ssid": "ExampleNet"})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let mut p = wifi_cfg(Some("*B"), None);
+        p.ssid = Some("ExampleNet".into());
+        p.installation = Some("indoor".into());
+        let result = set_wifi_configuration(&client, &p).await.unwrap();
+        assert_eq!(result["ssid"], "ExampleNet");
     }
 
     #[tokio::test]
