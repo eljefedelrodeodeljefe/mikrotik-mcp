@@ -8,9 +8,10 @@
 //! radio is the way to restart one.
 //!
 //! `/interface/wifi/security` is deliberately not exposed — it returns the
-//! passphrase in plaintext. Configuration profiles can carry security
-//! properties inline (`security.passphrase`), so everything read from or
-//! written to a configuration profile passes through [`redact_secrets`].
+//! passphrase in plaintext. Configuration profiles and interfaces can carry
+//! security properties inline (`security.passphrase`, `security.eap-password`),
+//! so everything read from or written to either passes through
+//! [`redact_secrets`].
 
 use anyhow::Context;
 use serde_json::{Map, Value, json};
@@ -148,7 +149,8 @@ pub async fn set_wifi_configuration(
 }
 
 pub async fn list_wifi_interfaces(client: &RouterosClient) -> anyhow::Result<Value> {
-    client.get("interface/wifi").await
+    let data = client.get("interface/wifi").await?;
+    Ok(redact_secrets(data))
 }
 
 pub async fn monitor_wifi_interface(
@@ -521,5 +523,32 @@ mod tests {
         let result = set_wifi_configuration(&client, &p).await.unwrap();
         assert_eq!(result["security.passphrase-set"], true);
         assert!(!result.to_string().contains("not-a-real-secret"));
+    }
+
+    #[tokio::test]
+    async fn list_wifi_interfaces_strips_inline_secrets() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/interface/wifi"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    ".id": "*1",
+                    "name": "wifi1",
+                    "configuration.ssid": "ExampleNet",
+                    "security.passphrase": "not-a-real-secret",
+                    "security.eap-password": "also-not-a-secret"
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_wifi_interfaces(&client).await.unwrap();
+        let text = result.to_string();
+        assert!(!text.contains("not-a-real-secret"), "{text}");
+        assert!(!text.contains("also-not-a-secret"), "{text}");
+        assert_eq!(result[0]["security.passphrase-set"], true);
+        assert_eq!(result[0]["security.eap-password-set"], true);
+        assert_eq!(result[0]["configuration.ssid"], "ExampleNet");
     }
 }

@@ -675,7 +675,8 @@ impl MikrotikServer {
     #[tool(
         description = "List CAPsMAN interfaces from /caps-man/interface — the capN master and \
             slave interfaces, their configuration, radio-mac, current-channel, current-state, \
-            and registered client counts"
+            and registered client counts. Inline security.passphrase is replaced by a \
+            security.passphrase-set flag"
     )]
     async fn list_capsman_interfaces(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::capsman::list_capsman_interfaces(&self.client)
@@ -782,7 +783,8 @@ impl MikrotikServer {
     #[tool(
         description = "List WiFi interfaces from /interface/wifi — name, configuration, channel, \
             radio-mac, master-interface, and running/inactive state. Includes the dynamic \
-            CAPsMAN-managed wcapN interfaces on a WiFi CAPsMAN manager"
+            CAPsMAN-managed wcapN interfaces on a WiFi CAPsMAN manager. Inline \
+            security.passphrase is replaced by a security.passphrase-set flag"
     )]
     async fn list_wifi_interfaces(&self) -> Result<CallToolResult, ErrorData> {
         let data = tools::wifi::list_wifi_interfaces(&self.client)
