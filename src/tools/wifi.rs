@@ -11,73 +11,16 @@
 //! passphrase in plaintext. Configuration profiles and interfaces can carry
 //! security properties inline (`security.passphrase`, `security.eap-password`),
 //! so everything read from or written to either passes through
-//! [`redact_secrets`].
+//! [`super::redact_secrets`].
 
-use anyhow::Context;
 use serde_json::{Map, Value, json};
 
+use super::{redact_secrets, resolve_profile_id};
 use crate::client::RouterosClient;
 use crate::params::{
-    ProvisionWifiRadioParams, RouterOsId, SetCapsmanChannelParams, SetCapsmanConfigurationParams,
+    ProvisionWifiRadioParams, SetCapsmanChannelParams, SetCapsmanConfigurationParams,
     SetWifiConfigurationParams, WifiMonitorParams,
 };
-
-/// Whether `key` holds a credential. Matched by suffix so inline dotted
-/// properties (`security.passphrase`), variants such as `private-passphrase`
-/// or `eap-password`, and fields RouterOS adds later are all covered.
-fn is_secret_key(key: &str) -> bool {
-    key.ends_with("passphrase") || key.ends_with("password")
-}
-
-/// Drops every credential field, recursively, and puts a `<key>-set` boolean
-/// in its place, so a caller can still tell whether one is configured.
-pub(crate) fn redact_secrets(value: Value) -> Value {
-    match value {
-        Value::Array(items) => Value::Array(items.into_iter().map(redact_secrets).collect()),
-        Value::Object(obj) => {
-            let mut out = Map::new();
-            for (k, v) in obj {
-                if is_secret_key(&k) {
-                    let set = v.as_str().map_or(!v.is_null(), |s| !s.is_empty());
-                    out.insert(format!("{k}-set"), json!(set));
-                } else {
-                    out.insert(k, redact_secrets(v));
-                }
-            }
-            Value::Object(out)
-        }
-        other => other,
-    }
-}
-
-/// Resolves a profile given by `.id` or by `name` to its `.id`. Names never
-/// reach the request path: they are looked up in the menu's listing. An empty
-/// name counts as not given.
-async fn resolve_profile_id(
-    client: &RouterosClient,
-    menu: &str,
-    id: Option<&RouterOsId>,
-    name: Option<&str>,
-) -> anyhow::Result<RouterOsId> {
-    let name = name.filter(|n| !n.trim().is_empty());
-    match (id, name) {
-        (Some(id), None) => Ok(id.clone()),
-        (None, Some(name)) => {
-            let items: Value = client.get(menu).await?;
-            let item = items
-                .as_array()
-                .into_iter()
-                .flatten()
-                .find(|i| i["name"] == name)
-                .with_context(|| format!("no profile named {name:?} in /{menu}"))?;
-            let raw = item[".id"]
-                .as_str()
-                .with_context(|| format!("profile {name:?} in /{menu} has no .id"))?;
-            RouterOsId::try_from(raw).map_err(anyhow::Error::msg)
-        }
-        _ => anyhow::bail!("pass exactly one of id or name"),
-    }
-}
 
 fn insert_str(body: &mut Map<String, Value>, key: &str, value: Option<&String>) {
     if let Some(v) = value {
@@ -212,6 +155,7 @@ pub async fn set_capsman_channel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::params::RouterOsId;
     use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -349,34 +293,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn redact_secrets_replaces_credentials_with_set_flags() {
-        let out = redact_secrets(json!([
-            {
-                ".id": "*1",
-                "name": "cfg-5g",
-                "ssid": "ExampleNet",
-                "security.passphrase": "not-a-real-secret",
-                "security.authentication-types": "wpa2-psk"
-            },
-            {
-                ".id": "*2",
-                "security": {"passphrase": ""},
-                "eap-password": "x",
-                "private-passphrase": "not-a-real-secret"
-            }
-        ]));
-        let text = out.to_string();
-        assert!(!text.contains("not-a-real-secret"), "{text}");
-        assert_eq!(out[0]["security.passphrase-set"], true);
-        assert!(out[0].get("security.passphrase").is_none());
-        assert_eq!(out[0]["security.authentication-types"], "wpa2-psk");
-        assert_eq!(out[0]["ssid"], "ExampleNet");
-        assert_eq!(out[1]["security"]["passphrase-set"], false);
-        assert_eq!(out[1]["eap-password-set"], true);
-        assert_eq!(out[1]["private-passphrase-set"], true);
-    }
-
     #[tokio::test]
     async fn list_wifi_configurations_strips_passphrase() {
         let server = MockServer::start().await;
@@ -508,29 +424,6 @@ mod tests {
                 .await
                 .is_err()
         );
-    }
-
-    #[tokio::test]
-    async fn resolve_profile_id_errors_on_entry_without_id() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/rest/interface/wifi/configuration"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-                {"name": "cfg-5g", "ssid": "ExampleNet"}
-            ])))
-            .mount(&server)
-            .await;
-
-        let client = RouterosClient::for_test(&server.uri());
-        let err = resolve_profile_id(
-            &client,
-            "interface/wifi/configuration",
-            None,
-            Some("cfg-5g"),
-        )
-        .await
-        .unwrap_err();
-        assert!(err.to_string().contains("has no .id"), "{err}");
     }
 
     #[tokio::test]

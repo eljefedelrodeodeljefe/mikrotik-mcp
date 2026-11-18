@@ -30,7 +30,7 @@ pub async fn list_capsman_radios(client: &RouterosClient) -> anyhow::Result<Valu
 
 pub async fn list_capsman_interfaces(client: &RouterosClient) -> anyhow::Result<Value> {
     let data = client.get("caps-man/interface").await?;
-    Ok(super::wifi::redact_secrets(data))
+    Ok(super::redact_secrets(data))
 }
 
 pub async fn list_capsman_registrations(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -39,7 +39,7 @@ pub async fn list_capsman_registrations(client: &RouterosClient) -> anyhow::Resu
 
 pub async fn list_capsman_configurations(client: &RouterosClient) -> anyhow::Result<Value> {
     let data = client.get("caps-man/configuration").await?;
-    Ok(super::wifi::redact_secrets(data))
+    Ok(super::redact_secrets(data))
 }
 
 pub async fn list_capsman_provisioning(client: &RouterosClient) -> anyhow::Result<Value> {
