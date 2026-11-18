@@ -22,14 +22,11 @@ use crate::params::{
     SetWifiConfigurationParams, WifiMonitorParams,
 };
 
-/// Whether `key` holds a credential. Inline properties arrive dotted
-/// (`security.passphrase`), so only the last segment is compared.
+/// Whether `key` holds a credential. Matched by suffix so inline dotted
+/// properties (`security.passphrase`), variants such as `private-passphrase`
+/// or `eap-password`, and fields RouterOS adds later are all covered.
 fn is_secret_key(key: &str) -> bool {
-    let last = key.rsplit('.').next().unwrap_or(key);
-    matches!(
-        last,
-        "passphrase" | "sae-password" | "eap-password" | "password"
-    )
+    key.ends_with("passphrase") || key.ends_with("password")
 }
 
 /// Drops every credential field, recursively, and puts a `<key>-set` boolean
@@ -360,7 +357,12 @@ mod tests {
                 "security.passphrase": "not-a-real-secret",
                 "security.authentication-types": "wpa2-psk"
             },
-            {".id": "*2", "security": {"passphrase": ""}, "eap-password": "x"}
+            {
+                ".id": "*2",
+                "security": {"passphrase": ""},
+                "eap-password": "x",
+                "private-passphrase": "not-a-real-secret"
+            }
         ]));
         let text = out.to_string();
         assert!(!text.contains("not-a-real-secret"), "{text}");
@@ -370,6 +372,7 @@ mod tests {
         assert_eq!(out[0]["ssid"], "ExampleNet");
         assert_eq!(out[1]["security"]["passphrase-set"], false);
         assert_eq!(out[1]["eap-password-set"], true);
+        assert_eq!(out[1]["private-passphrase-set"], true);
     }
 
     #[tokio::test]
