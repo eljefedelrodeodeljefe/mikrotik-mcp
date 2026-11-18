@@ -763,7 +763,8 @@ impl MikrotikServer {
     #[tool(
         description = "Set a CAPsMAN configuration profile in /caps-man/configuration, given by \
             .id or name — ssid, channel, security, datapath, country, installation, hide-ssid, \
-            comment. Only the given properties change. CAPs using the profile are \
+            comment. Only the given properties are set; a property cannot be unset or cleared \
+            (e.g. detaching a security profile). CAPs using the profile are \
             re-provisioned and their clients reconnect. Passphrases in the reply are replaced \
             by a <key>-set flag"
     )]
@@ -859,7 +860,8 @@ impl MikrotikServer {
     #[tool(
         description = "Set a WiFi configuration profile in /interface/wifi/configuration, given \
             by .id or name — ssid, channel, security, datapath, country, installation, mode, \
-            hide-ssid, disabled, comment. Only the given properties change. Interfaces using \
+            hide-ssid, disabled, comment. Only the given properties are set; a property cannot \
+            be unset or cleared (e.g. detaching a security profile). Interfaces using \
             the profile, including CAPsMAN-provisioned ones, restart and their clients \
             reconnect. Passphrases in the reply are replaced by a <key>-set flag"
     )]
