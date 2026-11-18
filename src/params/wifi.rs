@@ -83,7 +83,7 @@ pub struct SetWifiConfigurationParams {
     pub datapath: Option<String>,
     #[schemars(description = "Country name whose regulatory domain applies (e.g. 'Germany')")]
     pub country: Option<String>,
-    #[schemars(description = "Installation: 'indoor', 'outdoor' or 'any'")]
+    #[schemars(description = "Installation: 'indoor' or 'outdoor'")]
     pub installation: Option<String>,
     #[schemars(description = "Mode: 'ap', 'station', 'station-bridge' and the other wifi modes")]
     pub mode: Option<String>,
