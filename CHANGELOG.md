@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.8.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.7.0...v0.8.0) (2026-11-18)
+
+
+### Features
+
+* list_wifi_configurations, set_wifi_configuration, set_capsman_configuration ([883a863](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/883a863fa4c3c17935eadf8905f0c6cf722f8aa9))
+* list_wifi_configurations, set_wifi_configuration, set_capsman_configuration ([002a0e3](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/002a0e3f2c3d5c1e20e54726d5bc8a035ab86f23))
+
+
+### Bug Fixes
+
+* list only indoor and outdoor for set_wifi_configuration installation ([deee0c1](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/deee0c19c47d59b484a6d0b20507043c4cf2cf26))
+* match secret fields by suffix in redact_secrets ([ad4abff](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/ad4abff2315415d3b18a7936a5c7a6cd48c734fe))
+* redact inline passphrase in list_capsman_configurations ([3bf190e](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/3bf190e9122cb52fb274379e7bcf12fe9db92031))
+* redact inline secrets in list_capsman_interfaces and list_wifi_interfaces ([13c9ea0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/13c9ea0406bc9889e6f64048a66cd791f911cb6f))
+* treat an empty name as absent in the set_*_configuration id/name check ([4e70129](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/4e70129e1de300a6d3793c1f9db41609a5419a84))
+
+
+### Refactors
+
+* move redact_secrets and resolve_profile_id into tools/mod.rs ([6a406d0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/6a406d0ecc0cbb011eb8a35f657e5df0314e7f0c))
+
+
+### Documentation
+
+* say set_*_configuration cannot unset or clear a property ([4355e0c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/4355e0cef37457acf1acd675b461bc8dd56e6855))
+
 ## [0.7.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.6.0...v0.7.0) (2026-11-06)
 
 
