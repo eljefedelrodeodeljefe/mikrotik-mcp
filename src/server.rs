@@ -120,6 +120,49 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    #[tool(
+        description = "Get NTP settings (/system/ntp/client and /system/ntp/server): client \
+            enabled, servers, mode, sync status; server enabled, broadcast"
+    )]
+    async fn get_ntp(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::system::get_ntp(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Configure the NTP client (/system/ntp/client set): enabled (yes/no), \
+            servers (comma-separated), mode. Only the fields given change"
+    )]
+    async fn set_ntp_client(
+        &self,
+        Parameters(p): Parameters<SetNtpClientParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::system::set_ntp_client(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Configure the NTP server (/system/ntp/server set): enabled (yes/no), \
+            broadcast (yes/no). It answers on UDP 123 to whatever the input firewall admits; \
+            the defconf firewall admits the LAN only. Enable the client first so it serves \
+            synchronized time"
+    )]
+    async fn set_ntp_server(
+        &self,
+        Parameters(p): Parameters<SetNtpServerParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::system::set_ntp_server(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     #[tool(description = "Get recent system log entries, optionally filtered by topic and count")]
     async fn get_logs(
         &self,

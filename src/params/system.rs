@@ -41,3 +41,28 @@ pub struct GetLogsParams {
     )]
     pub topics: Option<String>,
 }
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetNtpClientParams {
+    #[schemars(description = "Client on or off: 'yes' or 'no'")]
+    pub enabled: Option<String>,
+    #[schemars(
+        description = "Upstream servers, comma-separated host names or addresses \
+            (e.g. '0.pool.ntp.org,1.pool.ntp.org')"
+    )]
+    pub servers: Option<String>,
+    #[schemars(
+        description = "Client mode: 'unicast' (default), 'broadcast', 'multicast' or 'manycast'"
+    )]
+    pub mode: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetNtpServerParams {
+    #[schemars(
+        description = "Serve time on UDP 123 to the clients the input firewall lets in: 'yes' or 'no'"
+    )]
+    pub enabled: Option<String>,
+    #[schemars(description = "Also broadcast time to the LAN: 'yes' or 'no'")]
+    pub broadcast: Option<String>,
+}

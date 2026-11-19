@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 
 use crate::client::{RouterosClient, SftpTarget};
 use crate::params::{
-    GetLogsParams, RestoreBackupParams, SaveBackupParams, SetSystemIdentityParams,
+    GetLogsParams, RestoreBackupParams, SaveBackupParams, SetNtpClientParams, SetNtpServerParams,
+    SetSystemIdentityParams,
 };
 
 pub async fn get_resources(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -139,11 +140,53 @@ pub async fn restore_backup(
     ))
 }
 
+/// NTP client and server settings together, plus the client's sync state.
+pub async fn get_ntp(client: &RouterosClient) -> anyhow::Result<Value> {
+    let ntp_client: Value = client.get("system/ntp/client").await?;
+    let ntp_server: Value = client.get("system/ntp/server").await?;
+    Ok(json!({"client": ntp_client, "server": ntp_server}))
+}
+
+/// Copies the given optional fields into a `set` body; at least one must be set.
+fn set_body(fields: &[(&str, &Option<String>)]) -> anyhow::Result<Value> {
+    let mut body = json!({});
+    for (key, value) in fields {
+        if let Some(v) = value {
+            body[*key] = json!(v);
+        }
+    }
+    anyhow::ensure!(
+        body.as_object().is_some_and(|o| !o.is_empty()),
+        "nothing to set: pass at least one field"
+    );
+    Ok(body)
+}
+
+pub async fn set_ntp_client(
+    client: &RouterosClient,
+    p: &SetNtpClientParams,
+) -> anyhow::Result<Value> {
+    let body = set_body(&[
+        ("enabled", &p.enabled),
+        ("servers", &p.servers),
+        ("mode", &p.mode),
+    ])?;
+    client.post("system/ntp/client/set", &body).await
+}
+
+pub async fn set_ntp_server(
+    client: &RouterosClient,
+    p: &SetNtpServerParams,
+) -> anyhow::Result<Value> {
+    let body = set_body(&[("enabled", &p.enabled), ("broadcast", &p.broadcast)])?;
+    client.post("system/ntp/server/set", &body).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn save_params(output_path: Option<&str>) -> SaveBackupParams {
@@ -302,5 +345,77 @@ mod tests {
         assert_eq!(arr.len(), 10);
         assert_eq!(arr[0]["n"], 50, "should keep the most recent entries");
         assert_eq!(arr[9]["n"], 59);
+    }
+
+    #[tokio::test]
+    async fn get_ntp_reads_client_and_server() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/ntp/client"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"enabled": "true", "servers": "0.pool.ntp.org", "status": "synchronized"}),
+            ))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/ntp/server"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"enabled": "false"})))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = get_ntp(&client).await.unwrap();
+        assert_eq!(result["client"]["status"], "synchronized");
+        assert_eq!(result["server"]["enabled"], "false");
+    }
+
+    #[tokio::test]
+    async fn set_ntp_client_posts_only_given_fields() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/ntp/client/set"))
+            .and(body_json(
+                json!({"enabled": "yes", "servers": "0.pool.ntp.org"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = SetNtpClientParams {
+            enabled: Some("yes".into()),
+            servers: Some("0.pool.ntp.org".into()),
+            mode: None,
+        };
+        set_ntp_client(&client, &p).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn set_ntp_server_posts_to_set_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/ntp/server/set"))
+            .and(body_json(json!({"enabled": "yes"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = SetNtpServerParams {
+            enabled: Some("yes".into()),
+            broadcast: None,
+        };
+        set_ntp_server(&client, &p).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn set_ntp_with_no_fields_is_refused() {
+        let client = RouterosClient::for_test("http://127.0.0.1:9");
+        let p = SetNtpServerParams {
+            enabled: None,
+            broadcast: None,
+        };
+        let err = set_ntp_server(&client, &p).await.unwrap_err();
+        assert!(err.to_string().contains("nothing to set"), "{err}");
     }
 }
