@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.8.0...v0.9.0) (2026-11-19)
+
+
+### Features
+
+* list_arp tool for the /ip/arp table ([038e1af](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/038e1af488244022af88a39e8c1e3e8fcf3fc770))
+* list_arp tool for the /ip/arp table ([a662d30](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/a662d30c998142a0fa9cc935e14d49a5f1f5b806))
+* NTP client and server tools ([2564fcf](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/2564fcff22e42b98c6cc1f6b8b02568c7e05d038))
+* NTP client and server tools (get_ntp, set_ntp_client, set_ntp_server) ([683c792](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/683c792bcf77c97d53afc158af7d887bb6b12611))
+
+
+### Documentation
+
+* how release builds are triggered and rebuilt ([aceb13b](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/aceb13bf2b5d88212db7e0db3cd45fd53d6bcad9))
+
 ## [0.8.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.7.0...v0.8.0) (2026-11-18)
 
 
