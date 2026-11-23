@@ -12,6 +12,10 @@ pub async fn get_resources(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/resource").await
 }
 
+pub async fn get_routerboard(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("system/routerboard").await
+}
+
 pub async fn get_identity(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/identity").await
 }
@@ -654,5 +658,24 @@ mod tests {
         };
         let err = set_ntp_server(&client, &p).await.unwrap_err();
         assert!(err.to_string().contains("nothing to set"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn get_routerboard_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/routerboard"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "model": "RB4011iGS+5HacQ2HnD",
+                "current-firmware": "7.20.4",
+                "upgrade-firmware": "7.23"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = get_routerboard(&client).await.unwrap();
+        assert_eq!(result["upgrade-firmware"], "7.23");
     }
 }

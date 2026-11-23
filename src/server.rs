@@ -103,6 +103,18 @@ impl MikrotikServer {
     // ── System ────────────────────────────────────────────────────────────────
 
     #[tool(
+        description = "Get RouterBOARD info from /system/routerboard — model, serial-number, \
+            current-firmware and upgrade-firmware. A current-firmware older than \
+            upgrade-firmware means /system routerboard upgrade and a reboot are pending"
+    )]
+    async fn get_routerboard(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::system::get_routerboard(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
         description = "Get RouterOS system resources: CPU load, free memory, uptime, version, board name"
     )]
     async fn get_system_resources(&self) -> Result<CallToolResult, ErrorData> {
