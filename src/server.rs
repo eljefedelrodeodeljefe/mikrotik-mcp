@@ -361,6 +361,45 @@ impl MikrotikServer {
     // ── Interfaces ────────────────────────────────────────────────────────────
 
     #[tool(
+        description = "List bridge ports from /interface/bridge/port — interface, bridge, pvid, \
+            hw offload, and STP role/status. Use the .id with set_bridge_port"
+    )]
+    async fn list_bridge_ports(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::interfaces::list_bridge_ports(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List the bridge host table from /interface/bridge/host — MAC address, \
+            on-interface, bridge, vid, and whether each entry is local, dynamic, or external. \
+            Shows which port a host is behind"
+    )]
+    async fn list_bridge_hosts(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::interfaces::list_bridge_hosts(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a bridge port in /interface/bridge/port — move it to another bridge \
+            and/or set its comment. Moving a port drops its link-layer traffic onto the new \
+            bridge immediately; hosts behind it keep their old DHCP lease until they renew"
+    )]
+    async fn set_bridge_port(
+        &self,
+        Parameters(p): Parameters<SetBridgePortParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::interfaces::set_bridge_port(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
         description = "List all network interfaces with type, MAC address, MTU, and running status"
     )]
     async fn list_interfaces(&self) -> Result<CallToolResult, ErrorData> {

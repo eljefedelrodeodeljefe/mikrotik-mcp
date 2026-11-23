@@ -2,7 +2,9 @@ use serde_json::{Value, json};
 
 use crate::client::RouterosClient;
 use crate::params::RouterOsId;
-use crate::params::{AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams};
+use crate::params::{
+    AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams, SetBridgePortParams,
+};
 
 pub async fn list_interfaces(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("interface").await
@@ -58,6 +60,32 @@ pub async fn remove_interface_list_member(
     id: &RouterOsId,
 ) -> anyhow::Result<()> {
     client.delete("interface/list/member", id).await
+}
+
+pub async fn list_bridge_ports(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("interface/bridge/port").await
+}
+
+pub async fn list_bridge_hosts(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("interface/bridge/host").await
+}
+
+pub async fn set_bridge_port(
+    client: &RouterosClient,
+    p: &SetBridgePortParams,
+) -> anyhow::Result<Value> {
+    let mut body = serde_json::Map::new();
+    if let Some(b) = &p.bridge {
+        body.insert("bridge".into(), json!(b));
+    }
+    if let Some(c) = &p.comment {
+        body.insert("comment".into(), json!(c));
+    }
+    anyhow::ensure!(
+        !body.is_empty(),
+        "nothing to set — pass bridge and/or comment"
+    );
+    client.patch("interface/bridge/port", &p.id, &body).await
 }
 
 #[cfg(test)]
@@ -180,5 +208,76 @@ mod tests {
         };
         let result = add_interface_list_member(&client, &p).await.unwrap();
         assert_eq!(result["list"], "WAN");
+    }
+
+    #[tokio::test]
+    async fn list_bridge_hosts_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/interface/bridge/host"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {"mac-address": "00:2B:67:0B:72:50", "on-interface": "ether6", "bridge": "bridge"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_bridge_hosts(&client).await.unwrap();
+        assert_eq!(result[0]["on-interface"], "ether6");
+    }
+
+    #[tokio::test]
+    async fn list_bridge_ports_calls_correct_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/interface/bridge/port"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {".id": "*4", "interface": "ether6", "bridge": "bridge"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let result = list_bridge_ports(&client).await.unwrap();
+        assert_eq!(result[0]["interface"], "ether6");
+    }
+
+    #[tokio::test]
+    async fn set_bridge_port_patches_only_given_fields() {
+        use wiremock::matchers::body_json;
+        let server = MockServer::start().await;
+        Mock::given(method("PATCH"))
+            .and(path("/rest/interface/bridge/port/*4"))
+            .and(body_json(json!({"bridge": "bridge-ci"})))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(
+                    json!({".id": "*4", "interface": "ether6", "bridge": "bridge-ci"}),
+                ),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = SetBridgePortParams {
+            id: crate::params::RouterOsId::try_from("*4").unwrap(),
+            bridge: Some("bridge-ci".into()),
+            comment: None,
+        };
+        let result = set_bridge_port(&client, &p).await.unwrap();
+        assert_eq!(result["bridge"], "bridge-ci");
+    }
+
+    #[tokio::test]
+    async fn set_bridge_port_rejects_empty_update() {
+        let client = RouterosClient::for_test("http://127.0.0.1:9");
+        let p = SetBridgePortParams {
+            id: crate::params::RouterOsId::try_from("*4").unwrap(),
+            bridge: None,
+            comment: None,
+        };
+        assert!(set_bridge_port(&client, &p).await.is_err());
     }
 }
