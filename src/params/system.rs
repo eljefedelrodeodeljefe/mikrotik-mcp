@@ -66,3 +66,40 @@ pub struct SetNtpServerParams {
     #[schemars(description = "Also broadcast time to the LAN: 'yes' or 'no'")]
     pub broadcast: Option<String>,
 }
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetClockParams {
+    #[schemars(
+        description = "Date in the format get_clock shows: 'YYYY-MM-DD' on RouterOS 7.10+ \
+            (e.g. '2026-01-31'), 'mmm/DD/YYYY' before (e.g. 'jan/31/2026')"
+    )]
+    pub date: Option<String>,
+    #[schemars(description = "Time of day, 'HH:MM:SS' (e.g. '13:05:00')")]
+    pub time: Option<String>,
+    #[schemars(description = "Time zone, e.g. 'Europe/Berlin', 'UTC' or 'manual'")]
+    pub time_zone_name: Option<String>,
+    #[schemars(
+        description = "Pick the time zone from the router's public IP (time-zone-autodetect). \
+            Turn it off before setting time-zone-name, or the router overrides it"
+    )]
+    pub time_zone_autodetect: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ConfirmParams {
+    #[schemars(
+        description = "Must be true. The device reboots or its boot loader is rewritten: set \
+            this only after the user has explicitly approved this action"
+    )]
+    pub confirm: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetPackageUpdateParams {
+    #[schemars(
+        description = "Run check-for-updates first, which asks the MikroTik download server \
+            for the latest version on the update channel (default: false, only read the last \
+            result)"
+    )]
+    pub check_for_updates: Option<bool>,
+}

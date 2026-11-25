@@ -72,6 +72,19 @@ impl MikrotikServer {
         }
     }
 
+    /// Refuses a disruptive tool unless the call carries `confirm: true`.
+    fn require_confirm(confirm: bool, what: &str) -> Result<(), ErrorData> {
+        if confirm {
+            Ok(())
+        } else {
+            Err(ErrorData::new(
+                ErrorCode::INVALID_PARAMS,
+                format!("{what}: ask the user, then call again with confirm=true"),
+                None,
+            ))
+        }
+    }
+
     fn require_field<'a>(value: &'a str, field: &str) -> Result<&'a str, ErrorData> {
         if value.trim().is_empty() {
             Err(ErrorData::new(
@@ -215,6 +228,132 @@ impl MikrotikServer {
                 .await
                 .map_err(tool_error)?;
         Ok(Self::ok_msg(&msg))
+    }
+
+    #[tool(
+        description = "Get the system clock (/system/clock): date, time, time-zone-name, \
+            time-zone-autodetect, gmt-offset, dst-active"
+    )]
+    async fn get_clock(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::system::get_clock(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set the system clock (/system/clock set): date, time, time-zone-name, \
+            time-zone-autodetect. Only the fields given change. With the NTP client \
+            synchronized, NTP overrides a manual date and time"
+    )]
+    async fn set_clock(
+        &self,
+        Parameters(p): Parameters<SetClockParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::system::set_clock(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Reboot the device (/system reboot). It is unreachable until it is back \
+            up, usually one to three minutes. Requires confirm=true, set only after the user \
+            has approved this reboot"
+    )]
+    async fn reboot(
+        &self,
+        Parameters(p): Parameters<ConfirmParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_confirm(p.confirm, "reboot restarts the device")?;
+        let msg = tools::system::reboot(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&msg))
+    }
+
+    #[tool(
+        description = "List installed packages (/system/package): name, version, build-time, \
+            disabled, and scheduled (an install or uninstall waiting for the next reboot)"
+    )]
+    async fn list_packages(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::system::list_packages(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Get /system/package/update: channel, installed-version, latest-version, \
+            status. check_for_updates=true runs check-for-updates first, which needs the \
+            router to reach the MikroTik download server"
+    )]
+    async fn get_package_update(
+        &self,
+        Parameters(p): Parameters<GetPackageUpdateParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data = tools::system::get_package_update(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Install the latest RouterOS version on the update channel \
+            (/system package update install): the router downloads the packages, then reboots \
+            to install them. Run get_package_update with check_for_updates=true first. Without \
+            internet access, put the .npk files in Files and call reboot instead. Requires \
+            confirm=true, set only after the user has approved this upgrade"
+    )]
+    async fn install_package_update(
+        &self,
+        Parameters(p): Parameters<ConfirmParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_confirm(
+            p.confirm,
+            "install_package_update upgrades and reboots the device",
+        )?;
+        let msg = tools::system::install_package_update(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg(&msg))
+    }
+
+    #[tool(
+        description = "Upgrade the RouterBOOT firmware (/system routerboard upgrade) to the \
+            upgrade-firmware version in /system/routerboard. It is written to the boot loader \
+            and takes effect at the next reboot, which this does not start. Do not cut power \
+            while it is written. Requires confirm=true, set only after the user has approved \
+            this upgrade"
+    )]
+    async fn upgrade_routerboard(
+        &self,
+        Parameters(p): Parameters<ConfirmParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_confirm(p.confirm, "upgrade_routerboard rewrites the boot loader")?;
+        let data = tools::system::upgrade_routerboard(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Get the device mode (/system/device-mode): mode (advanced, home, basic, \
+            rose) and which features it allows (container, fetch, scheduler, \
+            install-any-version, ...). Read-only here: /system device-mode update waits for a \
+            press of the mode button or a cold reboot and is cancelled when its session ends, \
+            and the REST API closes the session, so change it from a console session (SSH or \
+            the WinBox terminal) held open until it is confirmed"
+    )]
+    async fn get_device_mode(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::system::get_device_mode(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
     }
 
     // ── Interfaces ────────────────────────────────────────────────────────────
@@ -1346,6 +1485,26 @@ mod tests {
                 .await
                 .unwrap_err();
             assert_eq!(err.code, ErrorCode::INVALID_PARAMS, "{args}: {err:?}");
+        }
+        assert!(router.received_requests().await.unwrap().is_empty());
+        client.cancel().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn disruptive_tools_need_confirm_true() {
+        let router = MockServer::start().await;
+        let client = connect(server(true, &router)).await;
+        for tool in ["reboot", "install_package_update", "upgrade_routerboard"] {
+            for args in [json!({}), json!({"confirm": false})] {
+                let err = call(&client, tool, args.as_object().unwrap().clone())
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    err.code,
+                    ErrorCode::INVALID_PARAMS,
+                    "{tool} {args}: {err:?}"
+                );
+            }
         }
         assert!(router.received_requests().await.unwrap().is_empty());
         client.cancel().await.unwrap();

@@ -256,9 +256,10 @@ When a write fails because the gate is closed, tell the user to set
 work around it.
 
 Read current state before proposing any write. Confirm with the user before
-`remove_*` calls. Ask for explicit confirmation before every `restore_backup`
-call, because the device reboots. The tool refuses to run without
-`confirm: true`; set it only after the user has said yes to that restore.
+`remove_*` calls. Ask for explicit confirmation before every `restore_backup`,
+`reboot`, `install_package_update` and `upgrade_routerboard` call, because
+the device reboots or its boot loader is rewritten. These tools refuse to run
+without `confirm: true`; set it only after the user has said yes to that call.
 
 ## Things to avoid
 
