@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.9.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.8.0...v0.9.0) (2026-11-25)
+
+
+### Features
+
+* add get_routerboard ([991eb4c](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/991eb4c98e27919072d66eac7fbd9422e61a4cb2))
+* add list_bridge_ports, list_bridge_hosts and set_bridge_port ([28605f4](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/28605f4da41ff15ea6fbc9b900a6e406be74490f))
+* add_bridge_port and remove_bridge_port ([8fbdc9f](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/8fbdc9f62e498b324fcfe97d5af66252385b905d))
+* add_bridge_port and remove_bridge_port ([372c0be](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/372c0be1fd05f2396b75199187dde5d2705b22f4))
+* bridge port/host tools and get_routerboard ([81d00d4](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/81d00d4acbc4737782bf139338c73a9c839b3134))
+* clock, reboot, package update, RouterBOOT and device-mode tools ([e38338e](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/e38338e1ccff18dbbb7a50eecf78a357109362c2))
+* clock, reboot, package update, RouterBOOT and device-mode tools ([fcf6fef](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/fcf6fef5faf9a39c1bb2c62ef44cfba4db9c4894))
+* DHCP client tools and set_dhcp_network ([4f63a81](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/4f63a81f811dc55d41e79272adb106dbab07c5a0))
+* firewall set/move, DHCP client, IP services, logging and diagnostics tools ([eef1c30](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/eef1c308256b5ab9e0d4628fde691d95bae43dbe))
+* IP service, cloud, MAC server, logging and diagnostics tools ([cf5dbb2](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/cf5dbb2f40c0e7a580736d2ad903bce559ffd08d))
+* legacy wireless (/interface/wireless) tools ([eee0f84](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/eee0f8461d6e778f06145661ac8e899fe52b6acd))
+* legacy wireless interface, security-profile and connect-list tools ([11303a7](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/11303a743996e42a95249a83115c5325e3516c9a))
+* list_arp tool for the /ip/arp table ([038e1af](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/038e1af488244022af88a39e8c1e3e8fcf3fc770))
+* list_arp tool for the /ip/arp table ([a662d30](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/a662d30c998142a0fa9cc935e14d49a5f1f5b806))
+* NTP client and server tools ([2564fcf](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/2564fcff22e42b98c6cc1f6b8b02568c7e05d038))
+* NTP client and server tools (get_ntp, set_ntp_client, set_ntp_server) ([683c792](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/683c792bcf77c97d53afc158af7d887bb6b12611))
+* set and move firewall filter, nat and mangle rules ([5ee077d](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/5ee077d6e35808039d44e1dcb8523d9803b95de3))
+
+
+### Bug Fixes
+
+* redact pre-shared keys, WEP keys and secrets in tool output ([ef61bba](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/ef61bbad592f8c0ba5b4185af9052fc38dff972b))
+* run check-for-updates with a duration and report its final status ([a968b7f](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/a968b7f6f70dc79e3d7a9e8d6275d0bea1438c20))
+* send available-from in set_ip_service ([71ff3aa](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/71ff3aa31036176143734d6bc4a39eb08fd19586))
+
+
+### Refactors
+
+* build add and set bodies with a shared Props builder ([0ff40af](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/0ff40afd3938606020cf828d6bc282da05fd0bc8))
+
+
+### Documentation
+
+* how release builds are triggered and rebuilt ([aceb13b](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/aceb13bf2b5d88212db7e0db3cd45fd53d6bcad9))
+* shorten the available_from parameter description ([098b44f](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/commit/098b44f448989a062e25858f56d4befda8ef5934))
+
 ## [0.8.0](https://github.com/eljefedelrodeodeljefe/mikrotik-mcp/compare/v0.7.0...v0.8.0) (2026-11-18)
 
 
