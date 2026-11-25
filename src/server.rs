@@ -596,13 +596,48 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
-    #[tool(description = "Add a firewall filter rule")]
+    #[tool(
+        description = "Add a firewall filter rule (/ip/firewall/filter add). place-before \
+            inserts it before an existing rule; without it the rule is appended, after any \
+            final drop rule"
+    )]
     async fn add_firewall_filter(
         &self,
         Parameters(p): Parameters<AddFirewallFilterParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
         let data = tools::firewall::add_filter(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set properties of an existing firewall filter rule (/ip/firewall/filter \
+            set) by .id from list_firewall_filter, e.g. add in-interface-list to it. Only the fields \
+            given change; a property cannot be unset"
+    )]
+    async fn set_firewall_filter(
+        &self,
+        Parameters(p): Parameters<SetFirewallFilterParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::firewall::set_filter(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Move a firewall filter rule (/ip/firewall/filter move) before the rule \
+            given as destination, or to the end without one. Rules are matched top to bottom"
+    )]
+    async fn move_firewall_filter(
+        &self,
+        Parameters(p): Parameters<MoveFirewallRuleParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::firewall::move_rule(&self.client, tools::firewall::RuleTable::Filter, &p)
             .await
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
@@ -630,13 +665,47 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
-    #[tool(description = "Add a NAT rule (masquerade, port-forward, etc.)")]
+    #[tool(
+        description = "Add a NAT rule (masquerade, port-forward, etc.). place-before inserts \
+            it before an existing rule; without it the rule is appended"
+    )]
     async fn add_firewall_nat(
         &self,
         Parameters(p): Parameters<AddFirewallNatParams>,
     ) -> Result<CallToolResult, ErrorData> {
         self.guard_write()?;
         let data = tools::firewall::add_nat(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set properties of an existing firewall nat rule (/ip/firewall/nat \
+            set) by .id from list_firewall_nat, e.g. add in-interface-list to it. Only the fields \
+            given change; a property cannot be unset"
+    )]
+    async fn set_firewall_nat(
+        &self,
+        Parameters(p): Parameters<SetFirewallNatParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::firewall::set_nat(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Move a firewall nat rule (/ip/firewall/nat move) before the rule \
+            given as destination, or to the end without one. Rules are matched top to bottom"
+    )]
+    async fn move_firewall_nat(
+        &self,
+        Parameters(p): Parameters<MoveFirewallRuleParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::firewall::move_rule(&self.client, tools::firewall::RuleTable::Nat, &p)
             .await
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
@@ -679,6 +748,37 @@ impl MikrotikServer {
         Self::require_field(&p.chain, "chain")?;
         Self::require_field(&p.action, "action")?;
         let data = tools::firewall::add_mangle(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set properties of an existing firewall mangle rule (/ip/firewall/mangle \
+            set) by .id from list_firewall_mangle, e.g. add in-interface-list to it. Only the fields \
+            given change; a property cannot be unset"
+    )]
+    async fn set_firewall_mangle(
+        &self,
+        Parameters(p): Parameters<SetFirewallMangleParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::firewall::set_mangle(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Move a firewall mangle rule (/ip/firewall/mangle move) before the rule \
+            given as destination, or to the end without one. Rules are matched top to bottom"
+    )]
+    async fn move_firewall_mangle(
+        &self,
+        Parameters(p): Parameters<MoveFirewallRuleParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::firewall::move_rule(&self.client, tools::firewall::RuleTable::Mangle, &p)
             .await
             .map_err(tool_error)?;
         Ok(Self::ok(&data))
