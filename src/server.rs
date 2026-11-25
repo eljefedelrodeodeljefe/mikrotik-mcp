@@ -905,6 +905,90 @@ impl MikrotikServer {
         Ok(Self::ok_msg("removed"))
     }
 
+    #[tool(
+        description = "List DHCP server networks (/ip/dhcp-server/network): address, gateway, \
+            dns-server, ntp-server, domain handed to clients"
+    )]
+    async fn list_dhcp_networks(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::dhcp::list_networks(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a DHCP server network (/ip/dhcp-server/network set) by .id: \
+            gateway, dns-server, ntp-server, domain, comment. Only the fields given change; \
+            clients get them at their next lease renewal"
+    )]
+    async fn set_dhcp_network(
+        &self,
+        Parameters(p): Parameters<SetDhcpNetworkParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::dhcp::set_network(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    // ── DHCP client ───────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List DHCP clients (/ip/dhcp-client): interface, status, address, \
+            gateway, add-default-route, default-route-distance, use-peer-dns, use-peer-ntp"
+    )]
+    async fn list_dhcp_clients(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::dhcp::list_clients(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add a DHCP client on an interface (/ip/dhcp-client add): \
+            add-default-route, default-route-distance, use-peer-dns, use-peer-ntp, comment. A \
+            client with a higher default-route-distance gives a backup default route"
+    )]
+    async fn add_dhcp_client(
+        &self,
+        Parameters(p): Parameters<AddDhcpClientParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::dhcp::add_client(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a DHCP client (/ip/dhcp-client set) by .id from list_dhcp_clients. \
+            Only the fields given change"
+    )]
+    async fn set_dhcp_client(
+        &self,
+        Parameters(p): Parameters<SetDhcpClientParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::dhcp::set_client(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a DHCP client by .id. Its address and default route go with it")]
+    async fn remove_dhcp_client(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::dhcp::remove_client(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
     // ── DNS ───────────────────────────────────────────────────────────────────
 
     #[tool(

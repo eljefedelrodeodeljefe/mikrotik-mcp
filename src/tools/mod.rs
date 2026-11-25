@@ -91,8 +91,8 @@ pub(crate) async fn resolve_profile_id(
 
 /// The properties of an `add` (`PUT`) or `set` (`PATCH`, `POST …/set`) body,
 /// built from a tool's optional parameters. Only the parameters given are
-/// sent, so a `set` changes nothing else. Values go out as strings, and
-/// booleans as `"true"`/`"false"`.
+/// sent, so a `set` changes nothing else. Values go out as strings: numbers
+/// in decimal, booleans as `"true"`/`"false"`.
 #[derive(Debug, Default)]
 pub(crate) struct Props(Map<String, Value>);
 
@@ -115,6 +115,13 @@ impl Props {
     }
 
     pub(crate) fn flag(mut self, key: &str, value: Option<bool>) -> Self {
+        if let Some(v) = value {
+            self.0.insert(key.into(), json!(v.to_string()));
+        }
+        self
+    }
+
+    pub(crate) fn number(mut self, key: &str, value: Option<u32>) -> Self {
         if let Some(v) = value {
             self.0.insert(key.into(), json!(v.to_string()));
         }
@@ -204,13 +211,16 @@ mod tests {
             .text("ssid", Some("ExampleNet"))
             .flag("disabled", Some(false))
             .flag("use-peer-dns", None)
+            .number("default-route-distance", Some(2))
+            .number("port", None)
             .into_body();
         assert_eq!(
             body,
             json!({
                 "interface": "ether1",
                 "ssid": "ExampleNet",
-                "disabled": "false"
+                "disabled": "false",
+                "default-route-distance": "2"
             })
         );
     }
