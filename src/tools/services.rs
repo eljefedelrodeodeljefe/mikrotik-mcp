@@ -55,9 +55,7 @@ pub async fn set_ip_service(
     let body = Props::new()
         .flag("disabled", p.disabled)
         .number("port", p.port)
-        // `address` is the old name of available-from; RouterOS versions
-        // with available-from still take it and write it there.
-        .text("address", p.available_from.as_deref())
+        .text("available-from", p.available_from.as_deref())
         .text("certificate", p.certificate.as_deref())
         .text("tls-version", p.tls_version.as_deref())
         .number("max-sessions", p.max_sessions)
@@ -169,7 +167,7 @@ mod tests {
         Mock::given(method("PATCH"))
             .and(path("/rest/ip/service/*9"))
             .and(body_json(json!({
-                "address": "192.0.2.0/24",
+                "available-from": "192.0.2.0/24",
                 "certificate": "www",
                 "tls-version": "only-1.2"
             })))

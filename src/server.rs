@@ -1668,8 +1668,9 @@ impl MikrotikServer {
 
     #[tool(
         description = "Ping from the router (/ping): address, count (1..20, default 4), \
-            interface, src-address, size, routing-table. Returns one entry per request and \
-            the sent/received/packet-loss summary. Read-only"
+            interface, src-address, size, routing-table. Returns one entry per request; the \
+            last carries sent, received, packet-loss, avg-rtt, and status on failure (e.g. \
+            'no route to host'). Read-only"
     )]
     async fn ping(
         &self,
