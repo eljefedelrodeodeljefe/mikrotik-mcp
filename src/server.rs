@@ -258,8 +258,8 @@ impl MikrotikServer {
     }
 
     #[tool(
-        description = "Reboot the device (/system reboot). It is unreachable until it is back \
-            up, usually one to three minutes. Requires confirm=true, set only after the user \
+        description = "Reboot the device (/system reboot). RouterOS answers, then goes down; \
+            it is unreachable until it is back up, usually one to three minutes. Requires confirm=true, set only after the user \
             has approved this reboot"
     )]
     async fn reboot(
@@ -287,8 +287,10 @@ impl MikrotikServer {
 
     #[tool(
         description = "Get /system/package/update: channel, installed-version, latest-version, \
-            status. check_for_updates=true runs check-for-updates first, which needs the \
-            router to reach the MikroTik download server"
+            status. check_for_updates=true first runs check-for-updates for 15 s (the router \
+            must reach the MikroTik download server) and adds its final status as \
+            check-status, e.g. 'System is already up to date' or 'ERROR: could not resolve \
+            dns name'"
     )]
     async fn get_package_update(
         &self,

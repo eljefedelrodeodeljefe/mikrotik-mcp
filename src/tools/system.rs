@@ -202,20 +202,36 @@ pub async fn list_packages(client: &RouterosClient) -> anyhow::Result<Value> {
 }
 
 /// The update channel, installed and latest version and status of
-/// `/system/package/update`, after an optional `check-for-updates`.
+/// `/system/package/update`, after an optional `check-for-updates` whose
+/// final status is added as `check-status`.
 pub async fn get_package_update(
     client: &RouterosClient,
     p: &GetPackageUpdateParams,
 ) -> anyhow::Result<Value> {
-    if p.check_for_updates.unwrap_or(false) {
-        // Changes no configuration, only asks the download server.
-        let _: Value = client
-            .post_read("system/package/update/check-for-updates", &json!({}))
+    let check_status = if p.check_for_updates.unwrap_or(false) {
+        // Changes no configuration, only asks the download server. With a
+        // duration the command returns its progress entries after that time;
+        // the last one holds the final status.
+        let progress: Vec<Value> = client
+            .post_read(
+                "system/package/update/check-for-updates",
+                &json!({"duration": CHECK_FOR_UPDATES_DURATION}),
+            )
             .await
             .context("check-for-updates failed")?;
+        progress.last().and_then(|e| e.get("status")).cloned()
+    } else {
+        None
+    };
+    let mut update: Value = client.get("system/package/update").await?;
+    if let (Some(status), Some(obj)) = (check_status, update.as_object_mut()) {
+        obj.insert("check-status".into(), status);
     }
-    client.get("system/package/update").await
+    Ok(update)
 }
+
+/// How long `check-for-updates` runs before the REST call returns.
+const CHECK_FOR_UPDATES_DURATION: &str = "15s";
 
 pub async fn get_device_mode(client: &RouterosClient) -> anyhow::Result<Value> {
     client.get("system/device-mode").await
@@ -319,9 +335,10 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/rest/system/package/update/check-for-updates"))
+            .and(body_json(json!({"duration": "15s"})))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-                {"status": "finding out latest version..."},
-                {"status": "New version is available"}
+                {".section": "0", "channel": "stable", "status": "finding out latest version..."},
+                {".section": "1", "channel": "stable", "status": "System is already up to date"}
             ])))
             .expect(1)
             .mount(&server)
@@ -354,10 +371,12 @@ mod tests {
         };
         let out = get_package_update(&client, &checked).await.unwrap();
         assert_eq!(out["latest-version"], "7.21");
+        assert_eq!(out["check-status"], "System is already up to date");
         let read_only = GetPackageUpdateParams {
             check_for_updates: None,
         };
-        get_package_update(&client, &read_only).await.unwrap();
+        let out = get_package_update(&client, &read_only).await.unwrap();
+        assert!(out.get("check-status").is_none());
     }
 
     #[tokio::test]

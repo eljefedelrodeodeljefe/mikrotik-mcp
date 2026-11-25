@@ -97,9 +97,9 @@ pub struct ConfirmParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetPackageUpdateParams {
     #[schemars(
-        description = "Run check-for-updates first, which asks the MikroTik download server \
-            for the latest version on the update channel (default: false, only read the last \
-            result)"
+        description = "Run check-for-updates first (about 15 s), which asks the MikroTik \
+            download server for the latest version on the update channel (default: false, only \
+            read the last result)"
     )]
     pub check_for_updates: Option<bool>,
 }
