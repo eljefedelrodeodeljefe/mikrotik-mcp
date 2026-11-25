@@ -1525,6 +1525,197 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    // ── Services ──────────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List IP services (/ip/service): name, port, available-from (address \
+            on older RouterOS), certificate, tls-version, vrf, disabled. RouterOS 7.2x also \
+            lists dynamic entries (resolver, ntp, discover, open connections), which cannot be \
+            set"
+    )]
+    async fn list_ip_services(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::services::list_ip_services(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a static IP service (/ip/service set) by id or name: disabled, \
+            port, available-from, certificate, tls-version, max-sessions, vrf. Only the fields \
+            given change. Disabling or moving the service this server talks to (www-ssl or \
+            www) cuts it off"
+    )]
+    async fn set_ip_service(
+        &self,
+        Parameters(p): Parameters<SetIpServiceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::services::set_ip_service(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Get MikroTik cloud settings (/ip/cloud): ddns-enabled, \
+            ddns-update-interval, update-time, dns-name, public-address, status, \
+            back-to-home-vpn"
+    )]
+    async fn get_ip_cloud(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::services::get_ip_cloud(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set MikroTik cloud settings (/ip/cloud set): ddns-enabled (current \
+            RouterOS takes 'yes' or 'auto'), ddns-update-interval, update-time (boolean). \
+            Only the fields given change"
+    )]
+    async fn set_ip_cloud(
+        &self,
+        Parameters(p): Parameters<SetIpCloudParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::services::set_ip_cloud(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Get MAC server settings: /tool/mac-server (MAC Telnet), \
+            /tool/mac-server/mac-winbox and /tool/mac-server/ping, each with its \
+            allowed-interface-list or enabled"
+    )]
+    async fn get_mac_server(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::services::get_mac_server(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set MAC server settings: allowed-interface-list for MAC Telnet and for \
+            MAC WinBox, and MAC ping enabled. Only the fields given change. Returns the \
+            settings after the change"
+    )]
+    async fn set_mac_server(
+        &self,
+        Parameters(p): Parameters<SetMacServerParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::services::set_mac_server(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    // ── Logging ───────────────────────────────────────────────────────────────
+
+    #[tool(description = "List logging rules (/system/logging): topics, action, prefix, disabled")]
+    async fn list_logging_rules(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::logging::list_rules(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "List logging actions (/system/logging/action): name, target (memory, \
+            disk, echo, remote) and the target's settings"
+    )]
+    async fn list_logging_actions(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::logging::list_actions(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add a logging rule (/system/logging add): topics (e.g. \
+            'wireless,!debug') and the action that receives them (e.g. 'memory'), optional \
+            prefix"
+    )]
+    async fn add_logging_rule(
+        &self,
+        Parameters(p): Parameters<AddLoggingRuleParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.topics, "topics")?;
+        Self::require_field(&p.action, "action")?;
+        let data = tools::logging::add_rule(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a logging rule by .id (from list_logging_rules)")]
+    async fn remove_logging_rule(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::logging::remove_rule(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
+    // ── Diagnostics ───────────────────────────────────────────────────────────
+
+    #[tool(
+        description = "Ping from the router (/ping): address, count (1..20, default 4), \
+            interface, src-address, size, routing-table. Returns one entry per request and \
+            the sent/received/packet-loss summary. Read-only"
+    )]
+    async fn ping(
+        &self,
+        Parameters(p): Parameters<PingParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Self::require_field(&p.address, "address")?;
+        let data = tools::diagnostics::ping(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Resolve a name from the router (:resolve domain-name), through its own \
+            DNS resolver or the given server. Read-only"
+    )]
+    async fn resolve_dns(
+        &self,
+        Parameters(p): Parameters<ResolveDnsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Self::require_field(&p.domain_name, "domain_name")?;
+        let data = tools::diagnostics::resolve(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Download a URL to a file on the router (/tool fetch url=... \
+            dst-path=...), e.g. .npk packages from a LAN HTTP server for a router without \
+            internet access; a reboot then installs them. Overwrites a file of the same name. \
+            Returns the fetch status once the download has finished"
+    )]
+    async fn fetch_file(
+        &self,
+        Parameters(p): Parameters<FetchFileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.url, "url")?;
+        Self::require_field(&p.dst_path, "dst_path")?;
+        let data = tools::diagnostics::fetch_file(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
     // ── Disk ──────────────────────────────────────────────────────────────────
 
     #[tool(
@@ -1691,14 +1882,19 @@ mod tests {
     use serde_json::json;
     use wiremock::MockServer;
 
-    /// A tool is read-only only if its name says so. Everything else counts as
-    /// mutating, so a new tool that forgets `guard_write()` fails
+    /// A tool is read-only only if its name says so or it is listed in
+    /// `READ_ONLY_TOOLS`. Everything else counts as mutating, so a new tool
+    /// that forgets `guard_write()` fails
     /// `every_mutating_tool_is_refused_while_writes_are_off` unless it is
     /// named, and reviewed, as a read.
     const READ_ONLY_PREFIXES: &[&str] = &["get_", "list_", "monitor_"];
 
+    /// Read-only tools whose name is a RouterOS command, not a prefix above.
+    /// Each was reviewed: it changes no configuration and writes no file.
+    const READ_ONLY_TOOLS: &[&str] = &["ping", "resolve_dns"];
+
     fn is_read_only(name: &str) -> bool {
-        READ_ONLY_PREFIXES.iter().any(|p| name.starts_with(p))
+        READ_ONLY_PREFIXES.iter().any(|p| name.starts_with(p)) || READ_ONLY_TOOLS.contains(&name)
     }
 
     fn server(writes_enabled: bool, router: &MockServer) -> MikrotikServer {

@@ -47,8 +47,9 @@ src/
 3. Add a short `#[tool(description = "…")]` stub in the matching `impl`
    block in `src/server.rs`. Call `self.guard_write()?` first for any
    mutating tool. A read-only tool's name starts with `get_`, `list_` or
-   `monitor_`; the write-gate test treats every other tool as mutating and
-   fails if it runs while writes are off.
+   `monitor_`, or is listed in `READ_ONLY_TOOLS` in `src/server.rs` (`ping`,
+   `resolve_dns`); the write-gate test treats every other tool as mutating
+   and fails if it runs while writes are off.
 
 ## Build / run
 

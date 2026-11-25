@@ -3,13 +3,16 @@
 
 pub mod capsman;
 pub mod dhcp;
+pub mod diagnostics;
 pub mod disk;
 pub mod dns;
 pub mod firewall;
 pub mod interfaces;
 pub mod ip;
+pub mod logging;
 pub mod lte;
 pub mod network;
+pub mod services;
 pub mod smb;
 pub mod system;
 pub mod wifi;
