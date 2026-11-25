@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 
+use super::Props;
 use crate::client::RouterosClient;
 use crate::params::RouterOsId;
 use crate::params::{AddDhcpStaticLeaseParams, SetDhcpLeaseParams};
@@ -16,10 +17,11 @@ pub async fn add_static_lease(
     client: &RouterosClient,
     p: &AddDhcpStaticLeaseParams,
 ) -> anyhow::Result<Value> {
-    let mut body = json!({"mac-address": p.mac_address, "address": p.address});
-    if let Some(c) = &p.comment {
-        body["comment"] = json!(c);
-    }
+    let body = Props::new()
+        .with("mac-address", &p.mac_address)
+        .with("address", &p.address)
+        .text("comment", p.comment.as_deref())
+        .into_body();
     client.put("ip/dhcp-server/lease", &body).await
 }
 
@@ -43,23 +45,12 @@ pub async fn make_lease_static(client: &RouterosClient, id: &RouterOsId) -> anyh
 /// Only the supplied properties change. Useful for labelling a lease that was
 /// created by `make_lease_static`, which carries no comment of its own.
 pub async fn set_lease(client: &RouterosClient, p: &SetDhcpLeaseParams) -> anyhow::Result<Value> {
-    let mut body = json!({});
-    if let Some(v) = &p.address {
-        body["address"] = json!(v);
-    }
-    if let Some(v) = &p.mac_address {
-        body["mac-address"] = json!(v);
-    }
-    if let Some(v) = &p.comment {
-        body["comment"] = json!(v);
-    }
-    if let Some(v) = &p.server {
-        body["server"] = json!(v);
-    }
-    anyhow::ensure!(
-        body.as_object().is_some_and(|o| !o.is_empty()),
-        "set_dhcp_lease needs at least one property to change"
-    );
+    let body = Props::new()
+        .text("address", p.address.as_deref())
+        .text("mac-address", p.mac_address.as_deref())
+        .text("comment", p.comment.as_deref())
+        .text("server", p.server.as_deref())
+        .into_changes("set_dhcp_lease")?;
     client.patch("ip/dhcp-server/lease", &p.id, &body).await
 }
 
