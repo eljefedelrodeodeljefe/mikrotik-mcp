@@ -15,24 +15,12 @@
 
 use serde_json::{Map, Value, json};
 
-use super::{redact_secrets, resolve_profile_id};
+use super::{Props, redact_secrets, resolve_profile_id};
 use crate::client::RouterosClient;
 use crate::params::{
     ProvisionWifiRadioParams, SetCapsmanChannelParams, SetCapsmanConfigurationParams,
     SetWifiConfigurationParams, WifiMonitorParams,
 };
-
-fn insert_str(body: &mut Map<String, Value>, key: &str, value: Option<&String>) {
-    if let Some(v) = value {
-        body.insert(key.into(), json!(v));
-    }
-}
-
-fn insert_bool(body: &mut Map<String, Value>, key: &str, value: Option<bool>) {
-    if let Some(v) = value {
-        body.insert(key.into(), json!(v.to_string()));
-    }
-}
 
 pub async fn list_wifi_configurations(client: &RouterosClient) -> anyhow::Result<Value> {
     let data = client.get("interface/wifi/configuration").await?;
@@ -45,19 +33,16 @@ pub async fn set_capsman_configuration(
     client: &RouterosClient,
     p: &SetCapsmanConfigurationParams,
 ) -> anyhow::Result<Value> {
-    let mut body = Map::new();
-    insert_str(&mut body, "ssid", p.ssid.as_ref());
-    insert_str(&mut body, "channel", p.channel.as_ref());
-    insert_str(&mut body, "security", p.security.as_ref());
-    insert_str(&mut body, "datapath", p.datapath.as_ref());
-    insert_str(&mut body, "country", p.country.as_ref());
-    insert_str(&mut body, "installation", p.installation.as_ref());
-    insert_bool(&mut body, "hide-ssid", p.hide_ssid);
-    insert_str(&mut body, "comment", p.comment.as_ref());
-    anyhow::ensure!(
-        !body.is_empty(),
-        "set_capsman_configuration needs at least one property to change"
-    );
+    let body = Props::new()
+        .text("ssid", p.ssid.as_deref())
+        .text("channel", p.channel.as_deref())
+        .text("security", p.security.as_deref())
+        .text("datapath", p.datapath.as_deref())
+        .text("country", p.country.as_deref())
+        .text("installation", p.installation.as_deref())
+        .flag("hide-ssid", p.hide_ssid)
+        .text("comment", p.comment.as_deref())
+        .into_changes("set_capsman_configuration")?;
     let menu = "caps-man/configuration";
     let id = resolve_profile_id(client, menu, p.id.as_ref(), p.name.as_deref()).await?;
     let data = client.patch(menu, &id, &body).await?;
@@ -69,21 +54,18 @@ pub async fn set_wifi_configuration(
     client: &RouterosClient,
     p: &SetWifiConfigurationParams,
 ) -> anyhow::Result<Value> {
-    let mut body = Map::new();
-    insert_str(&mut body, "ssid", p.ssid.as_ref());
-    insert_str(&mut body, "channel", p.channel.as_ref());
-    insert_str(&mut body, "security", p.security.as_ref());
-    insert_str(&mut body, "datapath", p.datapath.as_ref());
-    insert_str(&mut body, "country", p.country.as_ref());
-    insert_str(&mut body, "installation", p.installation.as_ref());
-    insert_str(&mut body, "mode", p.mode.as_ref());
-    insert_bool(&mut body, "hide-ssid", p.hide_ssid);
-    insert_bool(&mut body, "disabled", p.disabled);
-    insert_str(&mut body, "comment", p.comment.as_ref());
-    anyhow::ensure!(
-        !body.is_empty(),
-        "set_wifi_configuration needs at least one property to change"
-    );
+    let body = Props::new()
+        .text("ssid", p.ssid.as_deref())
+        .text("channel", p.channel.as_deref())
+        .text("security", p.security.as_deref())
+        .text("datapath", p.datapath.as_deref())
+        .text("country", p.country.as_deref())
+        .text("installation", p.installation.as_deref())
+        .text("mode", p.mode.as_deref())
+        .flag("hide-ssid", p.hide_ssid)
+        .flag("disabled", p.disabled)
+        .text("comment", p.comment.as_deref())
+        .into_changes("set_wifi_configuration")?;
     let menu = "interface/wifi/configuration";
     let id = resolve_profile_id(client, menu, p.id.as_ref(), p.name.as_deref()).await?;
     let data = client.patch(menu, &id, &body).await?;
