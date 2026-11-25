@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use crate::client::RouterosClient;
 use crate::params::RouterOsId;
 use crate::params::{
-    AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams, SetBridgePortParams,
+    AddBridgePortParams, AddInterfaceListMemberParams, GetInterfaceParams, InterfaceNameParams,
+    SetBridgePortParams,
 };
 
 pub async fn list_interfaces(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -86,6 +87,27 @@ pub async fn set_bridge_port(
         "nothing to set — pass bridge and/or comment"
     );
     client.patch("interface/bridge/port", &p.id, &body).await
+}
+
+pub async fn add_bridge_port(
+    client: &RouterosClient,
+    p: &AddBridgePortParams,
+) -> anyhow::Result<Value> {
+    let mut body = json!({"bridge": p.bridge, "interface": p.interface});
+    if let Some(v) = p.pvid {
+        body["pvid"] = json!(v.to_string());
+    }
+    if let Some(v) = &p.comment {
+        body["comment"] = json!(v);
+    }
+    if let Some(v) = p.disabled {
+        body["disabled"] = json!(v.to_string());
+    }
+    client.put("interface/bridge/port", &body).await
+}
+
+pub async fn remove_bridge_port(client: &RouterosClient, id: &RouterOsId) -> anyhow::Result<()> {
+    client.delete("interface/bridge/port", id).await
 }
 
 #[cfg(test)]
@@ -279,5 +301,42 @@ mod tests {
             comment: None,
         };
         assert!(set_bridge_port(&client, &p).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn add_and_remove_bridge_port() {
+        use wiremock::matchers::body_json;
+        let server = MockServer::start().await;
+        Mock::given(method("PUT"))
+            .and(path("/rest/interface/bridge/port"))
+            .and(body_json(
+                json!({"bridge": "bridge", "interface": "wlan1", "pvid": "10"}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({".id": "*7", "bridge": "bridge", "interface": "wlan1"})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/rest/interface/bridge/port/*7"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let p = AddBridgePortParams {
+            bridge: "bridge".into(),
+            interface: "wlan1".into(),
+            pvid: Some(10),
+            comment: None,
+            disabled: None,
+        };
+        let added = add_bridge_port(&client, &p).await.unwrap();
+        assert_eq!(added[".id"], "*7");
+        let id = crate::params::RouterOsId::try_from("*7").unwrap();
+        remove_bridge_port(&client, &id).await.unwrap();
     }
 }

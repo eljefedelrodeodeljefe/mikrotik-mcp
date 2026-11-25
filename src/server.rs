@@ -412,6 +412,39 @@ impl MikrotikServer {
     }
 
     #[tool(
+        description = "Add an interface to a bridge (/interface/bridge/port add): bridge, \
+            interface, pvid, comment. Its traffic joins the bridge at once; IP addresses and \
+            DHCP belong on the bridge, not on the port"
+    )]
+    async fn add_bridge_port(
+        &self,
+        Parameters(p): Parameters<AddBridgePortParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.bridge, "bridge")?;
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::interfaces::add_bridge_port(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Remove a bridge port by .id (from list_bridge_ports). The interface \
+            leaves the bridge; hosts behind it lose their link to it at once"
+    )]
+    async fn remove_bridge_port(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::interfaces::remove_bridge_port(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
+    #[tool(
         description = "List all network interfaces with type, MAC address, MTU, and running status"
     )]
     async fn list_interfaces(&self) -> Result<CallToolResult, ErrorData> {
