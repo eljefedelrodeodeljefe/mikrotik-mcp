@@ -13,6 +13,7 @@ pub mod network;
 pub mod smb;
 pub mod system;
 pub mod wifi;
+pub mod wireless;
 
 use anyhow::Context;
 use serde_json::{Map, Value, json};

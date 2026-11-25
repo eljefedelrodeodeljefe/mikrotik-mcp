@@ -959,6 +959,147 @@ impl MikrotikServer {
         Ok(Self::ok(&data))
     }
 
+    // ── Wireless (legacy) ─────────────────────────────────────────────────────
+
+    #[tool(
+        description = "List legacy wireless interfaces (/interface/wireless, the wireless \
+            package on 802.11ac and older radios): name, mode, ssid, band, frequency, \
+            security-profile, disabled. /interface/wifi radios are under list_wifi_interfaces"
+    )]
+    async fn list_wireless_interfaces(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wireless::list_interfaces(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Get one legacy wireless interface (/interface/wireless) by name")]
+    async fn get_wireless_interface(
+        &self,
+        Parameters(p): Parameters<GetWirelessInterfaceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wireless::get_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a legacy wireless interface (/interface/wireless set), by id or \
+            name: mode (station, ap-bridge, ...), ssid, security-profile, \
+            default-authentication, wps-mode, band, frequency, channel-width, country, \
+            disabled, comment. Only the fields given change; a property cannot be unset. \
+            Changing mode, band or frequency restarts the radio and drops its clients"
+    )]
+    async fn set_wireless_interface(
+        &self,
+        Parameters(p): Parameters<SetWirelessInterfaceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::wireless::set_interface(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "List legacy wireless security profiles \
+            (/interface/wireless/security-profiles): mode, authentication-types, ciphers. Keys \
+            and passwords are never returned; a <key>-set flag says whether one is configured")]
+    async fn list_wireless_security_profiles(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wireless::list_security_profiles(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Add a legacy wireless security profile \
+            (/interface/wireless/security-profiles add): name, mode, authentication-types, \
+            unicast-ciphers, group-ciphers, wpa-pre-shared-key, wpa2-pre-shared-key. Keys are \
+            write-only and redacted in the result")]
+    async fn add_wireless_security_profile(
+        &self,
+        Parameters(p): Parameters<AddWirelessSecurityProfileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.name, "name")?;
+        let data = tools::wireless::add_security_profile(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Set a legacy wireless security profile, by id or name: mode, \
+            authentication-types, ciphers, wpa-pre-shared-key, wpa2-pre-shared-key, comment. \
+            Only the fields given change. Keys are write-only and redacted in the result. \
+            Interfaces using the profile reconnect their clients"
+    )]
+    async fn set_wireless_security_profile(
+        &self,
+        Parameters(p): Parameters<SetWirelessSecurityProfileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        let data = tools::wireless::set_security_profile(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Remove a legacy wireless security profile by .id (from \
+            list_wireless_security_profiles). RouterOS refuses one still in use"
+    )]
+    async fn remove_wireless_security_profile(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::wireless::remove_security_profile(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
+    #[tool(description = "List the legacy wireless connect list \
+            (/interface/wireless/connect-list): rules a station interface uses to pick an AP \
+            (interface, ssid, mac-address, security-profile, connect), matched top to bottom")]
+    async fn list_wireless_connect_list(&self) -> Result<CallToolResult, ErrorData> {
+        let data = tools::wireless::list_connect_list(&self.client)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(
+        description = "Add a legacy wireless connect-list rule: interface, ssid, mac-address, \
+            security-profile, connect (yes/no), signal-range, place-before. With \
+            default-authentication=no on the interface, a station connects only to APs a rule \
+            allows"
+    )]
+    async fn add_wireless_connect_list(
+        &self,
+        Parameters(p): Parameters<AddWirelessConnectListParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        Self::require_field(&p.interface, "interface")?;
+        let data = tools::wireless::add_connect_list(&self.client, &p)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok(&data))
+    }
+
+    #[tool(description = "Remove a legacy wireless connect-list rule by .id")]
+    async fn remove_wireless_connect_list(
+        &self,
+        Parameters(p): Parameters<RemoveByIdParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.guard_write()?;
+        tools::wireless::remove_connect_list(&self.client, &p.id)
+            .await
+            .map_err(tool_error)?;
+        Ok(Self::ok_msg("removed"))
+    }
+
     // ── LTE ───────────────────────────────────────────────────────────────────
 
     #[tool(

@@ -9,6 +9,7 @@ mod shared;
 mod smb;
 mod system;
 mod wifi;
+mod wireless;
 
 pub use dhcp::*;
 pub use dns::*;
@@ -21,3 +22,4 @@ pub use shared::*;
 pub use smb::*;
 pub use system::*;
 pub use wifi::*;
+pub use wireless::*;
