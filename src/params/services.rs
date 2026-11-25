@@ -21,8 +21,7 @@ pub struct SetIpServiceParams {
     pub port: Option<u32>,
     #[schemars(
         description = "Comma-separated IPv4/IPv6 prefixes allowed to use the service \
-            (available-from; RouterOS versions that list this as address need that name \
-            instead), e.g. '192.0.2.0/24,2001:db8::/32'. Empty allows any address"
+            (available-from; older RouterOS lists this property as address), e.g. '192.0.2.0/24,2001:db8::/32'. Empty allows any address"
     )]
     pub available_from: Option<String>,
     #[schemars(
