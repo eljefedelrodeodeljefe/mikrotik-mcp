@@ -146,6 +146,28 @@ router's admin password. Locally, the server hands the credentials to `curl`
 on its stdin (`curl --config -`), never on the command line, so other users on
 the machine can't read them through `ps`.
 
+## Disruptive tools
+
+`reboot`, `install_package_update` and `upgrade_routerboard` take the device
+down or rewrite its boot loader, so, like `restore_backup`, each refuses to
+run unless the call carries `confirm: true` (and `MIKROTIK_ALLOW_WRITES=true`):
+
+- `reboot` restarts the device. A router that closes the connection without
+  answering counts as rebooting.
+- `install_package_update` downloads the latest version on the update channel
+  and reboots into it. Check with `get_package_update` and
+  `check_for_updates: true` first. A router without internet access can take
+  `.npk` files uploaded to **Files** instead, installed by `reboot`.
+- `upgrade_routerboard` writes the RouterBOOT firmware shipped with the
+  installed RouterOS. It takes effect at the next reboot, which it does not
+  start.
+
+`get_device_mode` is read-only. `/system device-mode update` waits until the
+change is confirmed with the mode button or a cold reboot, and the change is
+cancelled when its session ends. The REST API closes the session before that,
+so change the device mode from a console session (SSH or the WinBox terminal)
+kept open until it is confirmed.
+
 ## The write gate is a convenience guard
 
 `MIKROTIK_ALLOW_WRITES=true` enables the mutating tools. Anyone who can set

@@ -1,10 +1,11 @@
 use anyhow::Context;
 use serde_json::{Value, json};
 
-use crate::client::{RouterosClient, SftpTarget};
+use super::Props;
+use crate::client::{RouterosClient, RouterosError, SftpTarget};
 use crate::params::{
-    GetLogsParams, RestoreBackupParams, SaveBackupParams, SetNtpClientParams, SetNtpServerParams,
-    SetSystemIdentityParams,
+    GetLogsParams, GetPackageUpdateParams, RestoreBackupParams, SaveBackupParams, SetClockParams,
+    SetNtpClientParams, SetNtpServerParams, SetSystemIdentityParams,
 };
 
 pub async fn get_resources(client: &RouterosClient) -> anyhow::Result<Value> {
@@ -182,6 +183,99 @@ pub async fn set_ntp_server(
     client.post("system/ntp/server/set", &body).await
 }
 
+pub async fn get_clock(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("system/clock").await
+}
+
+pub async fn set_clock(client: &RouterosClient, p: &SetClockParams) -> anyhow::Result<Value> {
+    let body = Props::new()
+        .text("date", p.date.as_deref())
+        .text("time", p.time.as_deref())
+        .flag("time-zone-autodetect", p.time_zone_autodetect)
+        .text("time-zone-name", p.time_zone_name.as_deref())
+        .into_changes("set_clock")?;
+    client.post("system/clock/set", &body).await
+}
+
+pub async fn list_packages(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("system/package").await
+}
+
+/// The update channel, installed and latest version and status of
+/// `/system/package/update`, after an optional `check-for-updates` whose
+/// final status is added as `check-status`.
+pub async fn get_package_update(
+    client: &RouterosClient,
+    p: &GetPackageUpdateParams,
+) -> anyhow::Result<Value> {
+    let check_status = if p.check_for_updates.unwrap_or(false) {
+        // Changes no configuration, only asks the download server. With a
+        // duration the command returns its progress entries after that time;
+        // the last one holds the final status.
+        let progress: Vec<Value> = client
+            .post_read(
+                "system/package/update/check-for-updates",
+                &json!({"duration": CHECK_FOR_UPDATES_DURATION}),
+            )
+            .await
+            .context("check-for-updates failed")?;
+        progress.last().and_then(|e| e.get("status")).cloned()
+    } else {
+        None
+    };
+    let mut update: Value = client.get("system/package/update").await?;
+    if let (Some(status), Some(obj)) = (check_status, update.as_object_mut()) {
+        obj.insert("check-status".into(), status);
+    }
+    Ok(update)
+}
+
+/// How long `check-for-updates` runs before the REST call returns.
+const CHECK_FOR_UPDATES_DURATION: &str = "15s";
+
+pub async fn get_device_mode(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.get("system/device-mode").await
+}
+
+/// Runs a command after which the router restarts. The router may close the
+/// connection before it answers; that counts as success. A connection that
+/// never opened does not.
+async fn run_restarting(client: &RouterosClient, path: &str, done: &str) -> anyhow::Result<String> {
+    match client.post_void(path, &json!({})).await {
+        Ok(()) => Ok(done.to_string()),
+        Err(e) => match e.downcast_ref::<RouterosError>() {
+            Some(RouterosError::Transport(t)) if !t.is_connect() => Ok(format!(
+                "{done} (the router closed the connection without answering, as it does when it \
+                    restarts)"
+            )),
+            _ => Err(e),
+        },
+    }
+}
+
+pub async fn reboot(client: &RouterosClient) -> anyhow::Result<String> {
+    run_restarting(
+        client,
+        "system/reboot",
+        "reboot started: the router is unreachable until it is back up",
+    )
+    .await
+}
+
+pub async fn install_package_update(client: &RouterosClient) -> anyhow::Result<String> {
+    run_restarting(
+        client,
+        "system/package/update/install",
+        "update install started: the router downloads the packages, then reboots into the new \
+            version",
+    )
+    .await
+}
+
+pub async fn upgrade_routerboard(client: &RouterosClient) -> anyhow::Result<Value> {
+    client.post("system/routerboard/upgrade", &json!({})).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +289,149 @@ mod tests {
             output_path: output_path.map(Into::into),
             password: None,
         }
+    }
+
+    #[tokio::test]
+    async fn clock_get_and_set() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/clock"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"date": "2026-01-31", "time": "13:05:00", "time-zone-name": "UTC"}),
+            ))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/clock/set"))
+            .and(body_json(json!({
+                "time-zone-autodetect": "false",
+                "time-zone-name": "Europe/Berlin"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        assert_eq!(get_clock(&client).await.unwrap()["date"], "2026-01-31");
+        let p = SetClockParams {
+            date: None,
+            time: None,
+            time_zone_name: Some("Europe/Berlin".into()),
+            time_zone_autodetect: Some(false),
+        };
+        set_clock(&client, &p).await.unwrap();
+        let empty = SetClockParams {
+            date: None,
+            time: None,
+            time_zone_name: None,
+            time_zone_autodetect: None,
+        };
+        assert!(set_clock(&client, &empty).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn package_update_checks_only_when_asked() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/package/update/check-for-updates"))
+            .and(body_json(json!({"duration": "15s"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {".section": "0", "channel": "stable", "status": "finding out latest version..."},
+                {".section": "1", "channel": "stable", "status": "System is already up to date"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/package/update"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "channel": "stable",
+                "installed-version": "7.20",
+                "latest-version": "7.21",
+                "status": "New version is available"
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/package"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!([{"name": "routeros", "version": "7.20"}])),
+            )
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let listed = list_packages(&client).await.unwrap();
+        assert_eq!(listed[0]["name"], "routeros");
+        let checked = GetPackageUpdateParams {
+            check_for_updates: Some(true),
+        };
+        let out = get_package_update(&client, &checked).await.unwrap();
+        assert_eq!(out["latest-version"], "7.21");
+        assert_eq!(out["check-status"], "System is already up to date");
+        let read_only = GetPackageUpdateParams {
+            check_for_updates: None,
+        };
+        let out = get_package_update(&client, &read_only).await.unwrap();
+        assert!(out.get("check-status").is_none());
+    }
+
+    #[tokio::test]
+    async fn reboot_counts_a_dropped_connection_as_started() {
+        use tokio::io::AsyncReadExt;
+        // A peer that reads the request and hangs up without answering,
+        // as a rebooting router does.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf).await;
+        });
+        let client = RouterosClient::for_test(&format!("http://{addr}"));
+        let msg = reboot(&client).await.unwrap();
+        assert!(msg.contains("closed the connection"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn reboot_reports_an_unreachable_router() {
+        // Nothing listens on port 9 (discard) here.
+        let client = RouterosClient::for_test("http://127.0.0.1:9");
+        assert!(reboot(&client).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn install_and_firmware_upgrade_post_their_commands() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/package/update/install"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/rest/system/routerboard/upgrade"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/rest/system/device-mode"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"mode": "advanced", "container": "false"})),
+            )
+            .mount(&server)
+            .await;
+
+        let client = RouterosClient::for_test(&server.uri());
+        let msg = install_package_update(&client).await.unwrap();
+        assert!(msg.contains("reboots"), "{msg}");
+        upgrade_routerboard(&client).await.unwrap();
+        assert_eq!(get_device_mode(&client).await.unwrap()["mode"], "advanced");
     }
 
     #[tokio::test]
