@@ -22,9 +22,20 @@ use crate::params::RouterOsId;
 
 /// Whether `key` holds a credential. Matched by suffix so inline dotted
 /// properties (`security.passphrase`), variants such as `private-passphrase`
-/// or `eap-password`, and fields RouterOS adds later are all covered.
+/// or `eap-password`, and fields RouterOS adds later are all covered. The
+/// legacy wireless security profiles add `wpa2-pre-shared-key`,
+/// `management-protection-key`, `static-sta-private-key` and the WEP keys
+/// `static-key-0` to `static-key-3`.
 fn is_secret_key(key: &str) -> bool {
-    key.ends_with("passphrase") || key.ends_with("password")
+    const SUFFIXES: &[&str] = &[
+        "passphrase",
+        "password",
+        "pre-shared-key",
+        "private-key",
+        "protection-key",
+        "secret",
+    ];
+    SUFFIXES.iter().any(|s| key.ends_with(s)) || key.starts_with("static-key-")
 }
 
 /// Drops every credential field, recursively, and puts a `<key>-set` boolean
@@ -156,6 +167,32 @@ mod tests {
         assert_eq!(out[1]["security"]["passphrase-set"], false);
         assert_eq!(out[1]["eap-password-set"], true);
         assert_eq!(out[1]["private-passphrase-set"], true);
+    }
+
+    #[test]
+    fn redact_secrets_covers_legacy_wireless_security_profiles() {
+        let out = redact_secrets(json!({
+            "name": "example-wpa2",
+            "authentication-types": "wpa2-psk",
+            "wpa-pre-shared-key": "not-a-real-secret",
+            "wpa2-pre-shared-key": "not-a-real-secret",
+            "mschapv2-password": "not-a-real-secret",
+            "mschapv2-username": "user",
+            "management-protection-key": "not-a-real-secret",
+            "static-key-0": "not-a-real-secret",
+            "static-algo-0": "none",
+            "static-sta-private-key": "",
+            "radius-mac-accounting": "no"
+        }));
+        assert!(!out.to_string().contains("not-a-real-secret"), "{out}");
+        assert_eq!(out["wpa2-pre-shared-key-set"], true);
+        assert_eq!(out["mschapv2-password-set"], true);
+        assert_eq!(out["static-key-0-set"], true);
+        assert_eq!(out["static-sta-private-key-set"], false);
+        assert_eq!(out["management-protection-key-set"], true);
+        assert_eq!(out["static-algo-0"], "none");
+        assert_eq!(out["mschapv2-username"], "user");
+        assert_eq!(out["authentication-types"], "wpa2-psk");
     }
 
     #[test]
